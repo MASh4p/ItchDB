@@ -1,0 +1,176 @@
+@page "/games"
+@inherits AnalyticsPage
+@inject NavigationManager Nav
+
+<PageTitle>Игры — ItchDB</PageTitle>
+
+<MudText Typo="Typo.h4">Игры</MudText>
+<MudText Class="itch-muted mb-3">Все собранные игры с фильтрами. Клик по названию открывает карточку игры с историей и позициями.</MudText>
+
+<DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
+    <MudPaper Class="pa-3 mb-3" Outlined="true">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6" md="3">
+                <MudTextField T="string" @bind-Value="Q" @bind-Value:after="ApplyAsync" Label="Поиск" Placeholder="название или автор"
+                              DebounceInterval="400" Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+            </MudItem>
+            <MudItem xs="6" sm="3" md="2">
+                <MudSelect T="string" @bind-Value="Genre" @bind-Value:after="ApplyAsync" Label="Жанр" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    <MudSelectItem T="string" Value="@Any">Все жанры</MudSelectItem>
+                    @foreach (var g in ItchCatalog.Genres.OrderBy(g => g.RussianName))
+                    {
+                        <MudSelectItem T="string" Value="@g.Slug">@g.RussianName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" sm="3" md="2">
+                <MudAutocomplete T="string" @bind-Value="Tag" @bind-Value:after="ApplyAsync" Label="Тег" SearchFunc="SearchTags"
+                                 ToStringFunc="@(s => s is null ? "" : D.Tag(s) is { } t ? Segments.DisplayName(t) : s)"
+                                 Clearable="true" MaxItems="30" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" />
+            </MudItem>
+            <MudItem xs="6" sm="3" md="1">
+                <MudSelect T="string" @bind-Value="Platform" @bind-Value:after="ApplyAsync" Label="Платформа" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    <MudSelectItem T="string" Value="@Any">Любая</MudSelectItem>
+                    @foreach (var p in ItchCatalog.PlatformFilters)
+                    {
+                        <MudSelectItem T="string" Value="@p.Slug">@p.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" sm="3" md="1">
+                <MudSelect T="string" @bind-Value="Price" @bind-Value:after="ApplyAsync" Label="Цена" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    <MudSelectItem T="string" Value="@Any">Любая</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("free")">Бесплатные</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("nyp")">Своя цена</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("paid")">Платные</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" sm="3" md="1">
+                <MudSelect T="string" @bind-Value="Year" @bind-Value:after="ApplyAsync" Label="Год" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    <MudSelectItem T="string" Value="@Any">Любой</MudSelectItem>
+                    @for (var y = DateTime.UtcNow.Year; y >= ItchCatalog.FirstYear; y--)
+                    {
+                        var year = y.ToString();
+                        <MudSelectItem T="string" Value="@year">@year</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" sm="3" md="2">
+                <MudSelect T="string" @bind-Value="Sort" @bind-Value:after="ApplyAsync" Label="Сортировка" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    @foreach (var s in SortOptions)
+                    {
+                        <MudSelectItem T="string" Value="@s.Key">@s.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <GamesTable Games="_rows" Title="@($"{Fmt.N(_matched)} {Fmt.Plural(_matched, "игра", "игры", "игр")}")"
+                Subtitle="@(_matched > _rows.Count ? $"показаны первые {Fmt.N(_rows.Count)}" : null)"
+                ExportName="games" ShowHot="_hotAvailable" ShowDelta="@(Sort is "hot" or "delta")" BayesMinVotes="A.Params.BayesMinVotes" RowsPerPage="50" />
+</DataGate>
+
+@code {
+    private const string Any = "any";
+    private const int MaxRows = 5000;
+
+    private static readonly (string Key, string Name)[] SortOptions =
+    [
+        ("ratings", "Больше оценок"),
+        ("wr", "Взвешенный рейтинг"),
+        ("hot", "Горячее"),
+        ("delta", "Прирост оценок"),
+        ("new", "Новые"),
+        ("comments", "Больше комментариев"),
+    ];
+
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+    [SupplyParameterFromQuery(Name = "genre")] public string? Genre { get; set; }
+    [SupplyParameterFromQuery(Name = "tag")] public string? Tag { get; set; }
+    [SupplyParameterFromQuery(Name = "platform")] public string? Platform { get; set; }
+    [SupplyParameterFromQuery(Name = "price")] public string? Price { get; set; }
+    [SupplyParameterFromQuery(Name = "year")] public string? Year { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
+
+    private List<GameRow> _rows = [];
+    private int _matched;
+    private bool _hotAvailable;
+
+    protected override Task OnInitializedAsync()
+    {
+        Genre ??= Any;
+        Platform ??= Any;
+        Price ??= Any;
+        Year ??= Any;
+        Sort ??= "ratings";
+        return base.OnInitializedAsync();
+    }
+
+    private async Task ApplyAsync()
+    {
+        var query = new Dictionary<string, object?>
+        {
+            ["q"] = string.IsNullOrWhiteSpace(Q) ? null : Q,
+            ["genre"] = Genre == Any ? null : Genre,
+            ["tag"] = string.IsNullOrEmpty(Tag) ? null : Tag,
+            ["platform"] = Platform == Any ? null : Platform,
+            ["price"] = Price == Any ? null : Price,
+            ["year"] = Year == Any ? null : Year,
+            ["sort"] = Sort == "ratings" ? null : Sort,
+        };
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(query), replace: true);
+        await RecomputeAsync();
+    }
+
+    private Task<IEnumerable<string>> SearchTags(string? text, CancellationToken ct)
+    {
+        var tags = D.Tags.Values.Where(t => D.Members(t.Id).Count > 0 && (F.ShowNsfw || !ItchCatalog.NsfwTags.Contains(t.Slug)));
+        if (!string.IsNullOrWhiteSpace(text))
+            tags = tags.Where(t => t.Name.Contains(text, StringComparison.OrdinalIgnoreCase) || t.Slug.Contains(text, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(tags.OrderByDescending(t => D.Members(t.Id).Count).Take(30).Select(t => t.Slug));
+    }
+
+    protected override void Compute()
+    {
+        IEnumerable<GameRow> games = A.Games(F);
+        _hotAvailable = D.SnapshotDays >= 2;
+
+        if (Genre is { } genre && genre != Any)
+        {
+            var seg = Segments.Genres(D).FirstOrDefault(s => s.Key == genre);
+            if (seg is not null) games = Segments.Members(D, seg, F);
+        }
+        if (!string.IsNullOrEmpty(Tag) && D.Tag(Tag) is { } tag) games = games.Where(g => g.HasTag(tag.Id));
+        if (Platform is { } platform && platform != Any && ItchCatalog.PlatformFilters.FirstOrDefault(p => p.Slug == platform) is { Flag: var flag and not Platforms.None })
+            games = games.Where(g => (g.Platforms & flag) != 0);
+        games = Price switch
+        {
+            "free" => games.Where(g => g.Price == PriceModel.Free),
+            "nyp" => games.Where(g => g.Price == PriceModel.NameYourPrice),
+            "paid" => games.Where(g => g.Price == PriceModel.Paid),
+            _ => games,
+        };
+        if (int.TryParse(Year, out var year)) games = games.Where(g => g.Year == year);
+        if (!string.IsNullOrWhiteSpace(Q))
+        {
+            var q = Q.Trim();
+            games = games.Where(g => g.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || (g.AuthorName?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        games = Sort switch
+        {
+            "wr" => games.Where(g => g.WeightedRating > 0).OrderByDescending(g => g.WeightedRating),
+            "hot" => games.Where(g => g.Hot > 0).OrderByDescending(g => g.Hot),
+            "delta" => games.Where(g => g.DeltaRatings > 0).OrderByDescending(g => g.DeltaRatings),
+            "new" => games.OrderByDescending(g => g.PublishedAt ?? (g.Year is { } y ? new DateTime(y, 1, 1) : DateTime.MinValue)),
+            "comments" => games.OrderByDescending(g => g.Comments ?? -1),
+            _ => games.OrderByDescending(g => g.Ratings).ThenByDescending(g => g.RatingAvg),
+        };
+
+        var list = games.ToList();
+        _matched = list.Count;
+        _rows = list.Count > MaxRows ? list.GetRange(0, MaxRows) : list;
+    }
+}

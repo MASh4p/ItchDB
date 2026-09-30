@@ -1,0 +1,43 @@
+@using ApexCharts
+@* Bar chart of labelled values. *@
+
+@if (Items.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="itch-muted pa-4">Нет данных для графика.</MudText>
+}
+else
+{
+    <ApexChart @key="_key" TItem="ChartPoint" Options="_options" Height="@Height">
+        <ApexPointSeries TItem="ChartPoint" Items="Items" Name="@Name" SeriesType="SeriesType.Bar"
+                         XValue="@(p => p.Label)" YValue="@(p => ChartData.Safe(p.Value))" />
+    </ApexChart>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ChartPoint> Items { get; set; } = [];
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public bool Horizontal { get; set; }
+    [Parameter] public object Height { get; set; } = 300;
+    [Parameter] public string Color { get; set; } = ItchTheme.Accent;
+    [Parameter] public int Decimals { get; set; }
+    [Parameter] public bool Logarithmic { get; set; }
+    [Parameter] public bool DataLabels { get; set; }
+
+    private ApexChartOptions<ChartPoint> _options = new();
+    private string _key = "";
+
+    protected override void OnParametersSet()
+    {
+        var key = ChartData.Key([new ChartSeries(Name, Items)]) + Horizontal + Logarithmic + Color;
+        if (key == _key) return;
+        _key = key;
+        _options = ChartTheme.Options<ChartPoint>();
+        _options.Colors = [Color];
+        _options.PlotOptions = new PlotOptions
+        {
+            Bar = new PlotOptionsBar { Horizontal = Horizontal, BorderRadius = 3, ColumnWidth = "70%", BarHeight = "70%" },
+        };
+        _options.DataLabels = new ApexCharts.DataLabels { Enabled = DataLabels };
+        _options.Yaxis = [new YAxis { DecimalsInFloat = Decimals, Logarithmic = Logarithmic && !Horizontal, ForceNiceScale = true }];
+    }
+}

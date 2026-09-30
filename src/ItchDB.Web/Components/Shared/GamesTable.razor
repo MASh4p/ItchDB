@@ -1,0 +1,155 @@
+@* Games with configurable metric columns, paging and export. *@
+
+<MudTable T="GameRow" Items="Games" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="@RowsPerPage"
+          Class="itch-table" Elevation="0" SortLabel="Сортировка">
+    <ToolBarContent>
+        @if (Title is not null)
+        {
+            <MudText Typo="Typo.h6">@Title</MudText>
+        }
+        @if (Subtitle is not null)
+        {
+            <MudText Typo="Typo.caption" Class="itch-muted ml-3">@Subtitle</MudText>
+        }
+        <MudSpacer />
+        @ToolBar
+        <ExportMenu T="GameRow" Name="@(ExportName ?? "games")" Rows="@(() => Games)" Columns="ExportColumns" />
+    </ToolBarContent>
+    <HeaderContent>
+        @if (ShowRank)
+        {
+            <MudTh Style="width:44px">#</MudTh>
+        }
+        <MudTh>Игра</MudTh>
+        <MudTh Style="text-align:right"><MudTableSortLabel T="GameRow" SortBy="g => g.Ratings">Оценок</MudTableSortLabel></MudTh>
+        <MudTh Style="text-align:right"><MudTableSortLabel T="GameRow" SortBy="g => g.RatingAvg ?? 0">★</MudTableSortLabel></MudTh>
+        @if (ShowWr)
+        {
+            <MudTh Style="text-align:right">
+                <MudTableSortLabel T="GameRow" SortBy="g => g.WeightedRating">WR</MudTableSortLabel>
+                <FormulaTip Title="@_wr.Title" Formula="@_wr.Formula" Text="@_wr.Text" />
+            </MudTh>
+        }
+        @if (ShowHot)
+        {
+            <MudTh Style="text-align:right">
+                <MudTableSortLabel T="GameRow" SortBy="g => g.Hot">Hot</MudTableSortLabel>
+                <FormulaTip Title="@Formulas.Hot.Title" Formula="@Formulas.Hot.Formula" Text="@Formulas.Hot.Text" />
+            </MudTh>
+        }
+        @if (ShowDelta)
+        {
+            <MudTh Style="text-align:right"><MudTableSortLabel T="GameRow" SortBy="g => g.DeltaRatings ?? int.MinValue">Δ оценок</MudTableSortLabel></MudTh>
+        }
+        @if (!Compact)
+        {
+            <MudTh Style="text-align:right"><MudTableSortLabel T="GameRow" SortBy="g => g.Comments ?? -1">Комм.</MudTableSortLabel></MudTh>
+            <MudTh>Жанр</MudTh>
+            <MudTh><MudTableSortLabel T="GameRow" SortBy="g => g.PublishedAt ?? new DateTime(g.Year ?? 1, 7, 1)">Выход</MudTableSortLabel></MudTh>
+            <MudTh>Платформы</MudTh>
+            <MudTh>Цена</MudTh>
+        }
+        @if (ShowFeatured)
+        {
+            <MudTh><MudTableSortLabel T="GameRow" SortBy="g => g.FeaturedAt ?? DateTime.MinValue">Featured</MudTableSortLabel></MudTh>
+        }
+    </HeaderContent>
+    <RowTemplate>
+        @if (ShowRank)
+        {
+            <MudTd Class="itch-muted itch-num">@(Rank(context))</MudTd>
+        }
+        <MudTd DataLabel="Игра" Style="max-width:360px"><GameCell Game="context" /></MudTd>
+        <MudTd DataLabel="Оценок" Class="itch-num" Style="text-align:right">@(context.RatingsKnown ? Fmt.N(context.Ratings) : "?")</MudTd>
+        <MudTd DataLabel="★" Class="itch-num" Style="text-align:right">@Fmt.Stars(context.RatingAvg)</MudTd>
+        @if (ShowWr)
+        {
+            <MudTd DataLabel="WR" Class="itch-num" Style="text-align:right">@(context.WeightedRating > 0 ? context.WeightedRating.ToString("0.00", Fmt.Ru) : "—")</MudTd>
+        }
+        @if (ShowHot)
+        {
+            <MudTd DataLabel="Hot" Class="itch-num" Style="text-align:right">@(context.Hot > 0 ? Fmt.N(context.Hot, 2) : "—")</MudTd>
+        }
+        @if (ShowDelta)
+        {
+            <MudTd DataLabel="Δ оценок" Class="itch-num" Style="text-align:right">
+                @(context.DeltaRatings is { } d ? $"{Fmt.Signed(d)} за {Fmt.Count(context.DeltaDays, "день", "дня", "дней")}" : "—")
+            </MudTd>
+        }
+        @if (!Compact)
+        {
+            <MudTd DataLabel="Комм." Class="itch-num" Style="text-align:right">@Fmt.N(context.Comments)</MudTd>
+            <MudTd DataLabel="Жанр">@GenreName(context.Genre)</MudTd>
+            <MudTd DataLabel="Выход" Class="itch-num">@(context.PublishedAt is { } p ? Fmt.Date(p) : context.Year?.ToString() ?? "—")</MudTd>
+            <MudTd DataLabel="Платформы" Style="font-size:.78rem">@Fmt.Platforms(context.Platforms)</MudTd>
+            <MudTd DataLabel="Цена" Style="font-size:.8rem">@Fmt.Price(context)</MudTd>
+        }
+        @if (ShowFeatured)
+        {
+            <MudTd DataLabel="Featured" Class="itch-num">@Fmt.Date(context.FeaturedAt)</MudTd>
+        }
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager RowsPerPageString="Строк:" InfoFormat="{first_item}–{last_item} из {all_items}" PageSizeOptions="new[] { 10, 25, 50, 100, 250 }" />
+    </PagerContent>
+    <NoRecordsContent>
+        <MudText Class="itch-muted">@Empty</MudText>
+    </NoRecordsContent>
+</MudTable>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<GameRow> Games { get; set; } = [];
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? ExportName { get; set; }
+    [Parameter] public bool ShowRank { get; set; } = true;
+    [Parameter] public bool ShowWr { get; set; } = true;
+    [Parameter] public bool ShowHot { get; set; }
+    [Parameter] public bool ShowDelta { get; set; }
+    [Parameter] public bool ShowFeatured { get; set; }
+    [Parameter] public int RowsPerPage { get; set; } = 25;
+    [Parameter] public int BayesMinVotes { get; set; } = 20;
+    [Parameter] public string Empty { get; set; } = "Игр не найдено.";
+    [Parameter] public RenderFragment? ToolBar { get; set; }
+    [Parameter] public bool Compact { get; set; }
+
+    private Formulas.Tip _wr = Formulas.WeightedRating(20);
+    private Dictionary<long, int> _ranks = [];
+
+    protected override void OnParametersSet()
+    {
+        _wr = Formulas.WeightedRating(BayesMinVotes);
+        _ranks = new Dictionary<long, int>(Games.Count);
+        for (var i = 0; i < Games.Count; i++) _ranks.TryAdd(Games[i].Id, i + 1);
+    }
+
+    private string Rank(GameRow g) => _ranks.TryGetValue(g.Id, out var r) ? r.ToString() : "";
+
+    public static string GenreName(string? slug) => slug is null ? "—" : ItchCatalog.GenreFromSlug(slug)?.RussianName ?? ItchCatalog.NameFromSlug(slug);
+
+    private static readonly IReadOnlyList<ExportColumn<GameRow>> ExportColumns =
+    [
+        new("ID", g => g.Id),
+        new("Название", g => g.Title),
+        new("Автор", g => g.AuthorName),
+        new("Ссылка", g => g.Url),
+        new("Оценок", g => g.RatingsKnown ? g.Ratings : null),
+        new("Средняя ★", g => g.RatingAvg),
+        new("WR", g => g.WeightedRating > 0 ? g.WeightedRating : null),
+        new("Комментариев", g => g.Comments),
+        new("Δ оценок", g => g.DeltaRatings),
+        new("Дней в окне Δ", g => g.DeltaDays > 0 ? g.DeltaDays : null),
+        new("Hot", g => g.Hot > 0 ? g.Hot : null),
+        new("Жанр", g => GenreName(g.Genre)),
+        new("Дата выхода", g => g.PublishedAt),
+        new("Год", g => g.Year),
+        new("Платформы", g => Fmt.Platforms(g.Platforms)),
+        new("Цена", g => Fmt.Price(g)),
+        new("Статус", g => Fmt.Status(g.Status)),
+        new("Скриншотов", g => g.HasDetails ? g.Screenshots : null),
+        new("18+", g => g.IsNsfw),
+        new("Featured", g => g.FeaturedAt),
+        new("Джем", g => g.IsJamEntry),
+        new("Место в popular", g => g.PopularRank),
+    ];
+}

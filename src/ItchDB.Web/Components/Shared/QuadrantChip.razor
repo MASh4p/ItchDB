@@ -1,0 +1,26 @@
+@* Quadrant of the opportunity map with its meaning in a tooltip. *@
+<MudTooltip Text="@SegmentAnalyzer.QuadrantHint(Value)" Arrow="true">
+    <span class="itch-quadrant @Css">@SegmentAnalyzer.QuadrantName(Value)</span>
+</MudTooltip>
+
+@code {
+    [Parameter] public Quadrant Value { get; set; }
+
+    private string Css => Value switch
+    {
+        Quadrant.BlueOcean => "itch-quadrant-blue",
+        Quadrant.RedOcean => "itch-quadrant-red",
+        Quadrant.QuietNiche => "itch-quadrant-quiet",
+        Quadrant.Trap => "itch-quadrant-trap",
+        _ => "itch-muted",
+    };
+
+    public static string Color(Quadrant q) => q switch
+    {
+        Quadrant.BlueOcean => "#5CC8FA",
+        Quadrant.RedOcean => "#FF6B6B",
+        Quadrant.QuietNiche => "#4CC38A",
+        Quadrant.Trap => "#F5B84A",
+        _ => "rgba(255,255,255,0.4)",
+    };
+}

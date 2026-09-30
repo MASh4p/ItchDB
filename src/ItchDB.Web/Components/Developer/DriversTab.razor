@@ -1,0 +1,157 @@
+@* What goes along with more ratings: uplift per feature and the OLS model controlling for age. *@
+
+<MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3">
+    <b>Корреляция ≠ причинность.</b> Здесь показано, что <i>сопутствует</i> большему числу оценок, а не что его вызывает.
+    Например, у популярных игр больше скриншотов отчасти потому, что их авторы вообще больше вкладываются в игру и её страницу.
+    Используйте как подсказку, где искать, а не как рецепт.
+</MudAlert>
+
+@if (Report.Sample < 2 * Drivers.MinGroupSize)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+        Для анализа нужны игры с прочитанными страницами (полные теги, скриншоты, статус). Сейчас их @Report.Sample — запустите глубокий сбор.
+    </MudAlert>
+}
+else
+{
+    <MudGrid Spacing="3" Class="mb-2">
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 itch-card" Outlined="true">
+                <Kpi Label="Выборка" Value="@Fmt.N(Report.Sample)" Large="true" Hint="игр с прочитанной страницей"
+                     Tip="Только у этих игр известны все теги, скриншоты, статус и отметка об ИИ." />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 itch-card" Outlined="true">
+                <Kpi Label="Качество модели (R²)" Value="@(Report.RSquared is { } r2 ? r2.ToString("0.00", Fmt.Ru) : "—")" Large="true"
+                     Hint="@(Report.RSquared is null ? $"нужно ≥ 200 игр с прочитанными страницами, сейчас {Fmt.N(Report.Sample)}" : $"{Report.ModelFeatures} факторов + возраст и скриншоты")"
+                     Formula="log(1 + оценки) = β₀ + β₁·log(1 + возраст) + β₂·log(1 + скриншоты) + Σ βᵢ·фактор"
+                     Tip="Доля разброса log(оценок), которую объясняют факторы. Остальное — сама игра: идея, качество, удача, продвижение." />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 itch-card" Outlined="true">
+                <Kpi Label="Возраст ×2" Value="@Fmt.Times(Report.AgeDoublingMultiplier)" Large="true" Hint="к числу оценок"
+                     Tip="Во сколько раз больше оценок у игры, которая вдвое старше, при прочих равных." />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 itch-card" Outlined="true">
+                <Kpi Label="Скриншотов ×2" Value="@Fmt.Times(Report.ScreenshotsDoublingMultiplier)" Large="true" Hint="к числу оценок"
+                     Tip="Во сколько раз больше оценок у игры с вдвое большим числом скриншотов, при прочих равных." />
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudTable T="DriverResult" Items="Report.Results" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" SortLabel="Сортировка"
+              Class="itch-table mb-3" Elevation="0" Filter="Matches">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Факторы</MudText>
+            <MudSpacer />
+            <MudSwitch T="bool" @bind-Value="_onlySignificant" Color="Color.Primary" Label="Только значимые" Class="mr-2" />
+            <ExportMenu T="DriverResult" Name="success-drivers" Rows="@(() => Report.Results.Where(Matches))" Columns="ExportColumns" />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh><MudTableSortLabel T="DriverResult" SortBy="r => r.Name">Фактор</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel T="DriverResult" SortBy="r => r.Group">Группа</MudTableSortLabel></MudTh>
+            <MudTh Style="text-align:right"><MudTableSortLabel T="DriverResult" SortBy="r => r.With">Игр с / без</MudTableSortLabel></MudTh>
+            <MudTh Style="text-align:right">Медиана с / без</MudTh>
+            <MudTh Style="text-align:right">Шанс ≥ @SuccessThreshold с / без</MudTh>
+            <MudTh Style="text-align:right">
+                <MudTableSortLabel T="DriverResult" SortBy="r => r.Uplift.HasValue ? r.Uplift.Value.Ratio : 0">Uplift</MudTableSortLabel>
+                <FormulaTip Title="@Formulas.Uplift.Title" Formula="@Formulas.Uplift.Formula" Text="@Formulas.Uplift.Text" />
+            </MudTh>
+            <MudTh Style="text-align:right">
+                <MudTableSortLabel T="DriverResult" SortBy="r => r.Multiplier ?? 0" InitialDirection="SortDirection.Descending">Множитель</MudTableSortLabel>
+                <FormulaTip Title="@Formulas.Multiplier.Title" Formula="@Formulas.Multiplier.Formula" Text="@Formulas.Multiplier.Text" />
+            </MudTh>
+            <MudTh Style="text-align:right">p</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Фактор">@context.Name</MudTd>
+            <MudTd DataLabel="Группа" Class="itch-muted">@context.Group</MudTd>
+            <MudTd DataLabel="Игр" Class="itch-num" Style="text-align:right">@Fmt.N(context.With) / @Fmt.N(context.Without)</MudTd>
+            <MudTd DataLabel="Медиана" Class="itch-num" Style="text-align:right">@Fmt.N(context.MedianWith, 0) / @Fmt.N(context.MedianWithout, 0)</MudTd>
+            <MudTd DataLabel="Шанс" Class="itch-num" Style="text-align:right">@Fmt.Pct(context.SuccessWith, 1) / @Fmt.Pct(context.SuccessWithout, 1)</MudTd>
+            <MudTd DataLabel="Uplift" Class="itch-num" Style="text-align:right">
+                @if (context.Uplift is { } u)
+                {
+                    <MudTooltip Text="@($"95%: {Fmt.Times(u.Low)} – {Fmt.Times(u.High)}")">
+                        <span style="color:@(u.Low > 1 ? "#4CC38A" : u.High < 1 ? "#FF8A8A" : "inherit")">@Fmt.Times(u.Ratio)</span>
+                    </MudTooltip>
+                }
+                else
+                {
+                    <span class="itch-muted">—</span>
+                }
+            </MudTd>
+            <MudTd DataLabel="Множитель" Class="itch-num" Style="text-align:right">
+                @if (context.Multiplier is { } m)
+                {
+                    <MudTooltip Text="@($"95%: {Fmt.Times(context.MultiplierLow)} – {Fmt.Times(context.MultiplierHigh)}")">
+                        <b style="color:@(context.Significant ? (m > 1 ? "#4CC38A" : "#FF8A8A") : "inherit")">@Fmt.Times(m)</b>
+                    </MudTooltip>
+                }
+                else
+                {
+                    <span class="itch-muted">—</span>
+                }
+            </MudTd>
+            <MudTd DataLabel="p" Class="itch-num itch-muted" Style="text-align:right">@(context.PValue is { } p ? (p < 0.001 ? "<0,001" : p.ToString("0.000", Fmt.Ru)) : "—")</MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Строк:" InfoFormat="{first_item}–{last_item} из {all_items}" PageSizeOptions="new[] { 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+
+    @if (Report.Correlations.Count > 0)
+    {
+        <MudPaper Class="pa-4" Outlined="true">
+            <div class="itch-section-title">
+                Связь с числом оценок (ранговая корреляция Спирмена)
+                <FormulaTip Title="ρ Спирмена" Formula="ρ = корреляция рангов, от −1 до 1" Text="0 — связи нет, 0,3 — заметная, 0,5 и выше — сильная. Не учитывает другие факторы." />
+            </div>
+            @foreach (var c in Report.Correlations)
+            {
+                <div class="d-flex align-center gap-3 py-1">
+                    <span style="width:220px">@c.Name</span>
+                    <div class="itch-bar-bg" style="width:160px">
+                        <div class="itch-bar-fill" style="@($"width:{Math.Abs(c.Rho) * 100:0}%;background:{(c.Rho >= 0 ? "#4CC38A" : "#FF8A8A")}")"></div>
+                    </div>
+                    <b class="itch-num" style="width:56px">@c.Rho.ToString("+0.00;−0.00;0", Fmt.Ru)</b>
+                    <span class="itch-muted" style="font-size:.82rem">@c.Note · n = @Fmt.N(c.N)</span>
+                </div>
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public DriversReport Report { get; set; } = DriversReport.Empty;
+    [Parameter] public int MinRatings { get; set; } = 4;
+    [Parameter] public int SuccessThreshold { get; set; } = 10;
+
+    private bool _onlySignificant;
+
+    private bool Matches(DriverResult r) => !_onlySignificant || r.Significant || r.Uplift is { } u && (u.Low > 1 || u.High < 1);
+
+    private IReadOnlyList<ExportColumn<DriverResult>> ExportColumns =>
+    [
+        new("Фактор", r => r.Name),
+        new("Группа", r => r.Group),
+        new("Игр с фактором", r => r.With),
+        new("Игр без", r => r.Without),
+        new("Медиана с", r => r.MedianWith),
+        new("Медиана без", r => r.MedianWithout),
+        new($"Шанс ≥ {SuccessThreshold} с", r => r.SuccessWith),
+        new($"Шанс ≥ {SuccessThreshold} без", r => r.SuccessWithout),
+        new("Uplift", r => r.Uplift?.Ratio),
+        new("Uplift: нижняя граница", r => r.Uplift?.Low),
+        new("Uplift: верхняя граница", r => r.Uplift?.High),
+        new("Множитель", r => r.Multiplier),
+        new("Множитель: нижняя граница", r => r.MultiplierLow),
+        new("Множитель: верхняя граница", r => r.MultiplierHigh),
+        new("p", r => r.PValue),
+        new("Значим", r => r.Significant),
+    ];
+}

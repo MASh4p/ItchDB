@@ -1,0 +1,167 @@
+@inject NavigationManager Nav
+@* Demand (smoothed median ratings) against competition (games on itch.io), split into the four quadrants at the medians. *@
+
+@if (_points.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="itch-muted pa-4">Недостаточно сегментов с данными для карты.</MudText>
+}
+else
+{
+    <svg viewBox="0 0 @W @H" class="itch-map" role="img" aria-label="Карта возможностей">
+        <rect x="@L" y="@T" width="@(W - L - R)" height="@(H - T - B)" fill="rgba(255,255,255,0.015)" />
+        <rect x="@L" y="@T" width="@F(_splitX - L)" height="@F(_splitY - T)" fill="rgba(92,200,250,0.05)" />
+        <rect x="@F(_splitX)" y="@F(_splitY)" width="@F(W - R - _splitX)" height="@F(H - B - _splitY)" fill="rgba(245,184,74,0.04)" />
+
+        @foreach (var t in _xTicks)
+        {
+            <g>
+                <line x1="@F(t.Pos)" x2="@F(t.Pos)" y1="@T" y2="@(H - B)" stroke="rgba(255,255,255,0.06)" />
+                <text x="@F(t.Pos)" y="@(H - B + 16)" text-anchor="middle" class="itch-map-tick">@t.Label</text>
+            </g>
+        }
+        @foreach (var t in _yTicks)
+        {
+            <g>
+                <line x1="@L" x2="@(W - R)" y1="@F(t.Pos)" y2="@F(t.Pos)" stroke="rgba(255,255,255,0.06)" />
+                <text x="@(L - 8)" y="@F(t.Pos + 4)" text-anchor="end" class="itch-map-tick">@t.Label</text>
+            </g>
+        }
+
+        <line x1="@F(_splitX)" x2="@F(_splitX)" y1="@T" y2="@(H - B)" stroke="rgba(255,255,255,0.28)" stroke-dasharray="5 5" />
+        <line x1="@L" x2="@(W - R)" y1="@F(_splitY)" y2="@F(_splitY)" stroke="rgba(255,255,255,0.28)" stroke-dasharray="5 5" />
+
+        <text x="@(L + 10)" y="@(T + 18)" class="itch-map-quadrant" fill="#5CC8FA">Голубой океан</text>
+        <text x="@(W - R - 10)" y="@(T + 18)" text-anchor="end" class="itch-map-quadrant" fill="#FF6B6B">Красный океан</text>
+        <text x="@(L + 10)" y="@(H - B - 10)" class="itch-map-quadrant" fill="#4CC38A">Тихая ниша</text>
+        <text x="@(W - R - 10)" y="@(H - B - 10)" text-anchor="end" class="itch-map-quadrant" fill="#F5B84A">Ловушка</text>
+
+        @foreach (var p in _points)
+        {
+            <g class="itch-map-point" @onclick="@(() => Nav.NavigateTo($"/tags/{Uri.EscapeDataString(p.Stats.Key)}"))">
+                <title>@Tooltip(p.Stats)</title>
+                <circle cx="@F(p.X)" cy="@F(p.Y)" r="@F(p.Radius)" fill="@QuadrantChip.Color(p.Stats.Quadrant)" fill-opacity="0.55"
+                        stroke="@QuadrantChip.Color(p.Stats.Quadrant)" stroke-width="1.2" />
+                <text x="@F(p.LabelX)" y="@F(p.LabelY)" text-anchor="@p.Anchor" class="itch-map-label" visibility="@(p.Label ? "visible" : "hidden")">@p.Stats.Name</text>
+            </g>
+        }
+
+        <text x="@((L + W - R) / 2)" y="@(H - 6)" text-anchor="middle" class="itch-map-axis">Конкуренция: игр в сегменте на itch.io (лог. шкала) →</text>
+        <text x="14" y="@((T + H - B) / 2)" text-anchor="middle" class="itch-map-axis" transform="rotate(-90 14 @((T + H - B) / 2))">Спрос: сглаженная медиана оценок →</text>
+    </svg>
+    <MudText Typo="Typo.caption" Class="itch-muted">
+        Пунктир — медианы среди показанных сегментов. Размер точки — шанс набрать @Threshold+ оценок. Клик по точке открывает страницу сегмента.
+    </MudText>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SegmentStats> Items { get; set; } = [];
+    [Parameter] public int Labels { get; set; } = 28;
+    [Parameter] public int Threshold { get; set; } = 10;
+    [Parameter] public int MinRatings { get; set; } = 4;
+
+    private const int W = 1000, H = 580, L = 64, R = 24, T = 16, B = 48;
+    private sealed record Point(SegmentStats Stats, double X, double Y, double Radius)
+    {
+        public bool Label { get; init; }
+        public double LabelX { get; init; }
+        public double LabelY { get; init; }
+        public string Anchor { get; init; } = "start";
+    }
+
+    private readonly record struct Box(double X1, double Y1, double X2, double Y2)
+    {
+        public bool Hits(Box o) => X1 < o.X2 && o.X1 < X2 && Y1 < o.Y2 && o.Y1 < Y2;
+    }
+    private sealed record Tick(double Pos, string Label);
+
+    private List<Point> _points = [];
+    private List<Tick> _xTicks = [];
+    private List<Tick> _yTicks = [];
+    private double _splitX, _splitY;
+
+    private static string F(double v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+
+    protected override void OnParametersSet()
+    {
+        var items = Items.Where(s => s.Opportunity is not null && s.Denominator > 0 && s.AdjMedian > 0).ToList();
+        _points = [];
+        if (items.Count == 0) return;
+
+        var xs = items.Select(s => Math.Log10(s.Denominator)).ToList();
+        var ys = items.Select(s => Math.Log10(1 + s.AdjMedian)).ToList();
+        double x0 = Math.Floor(xs.Min() * 2) / 2, x1 = Math.Ceiling(xs.Max() * 2) / 2;
+        double y0 = Math.Max(0, Math.Floor(ys.Min() * 4) / 4), y1 = Math.Ceiling(ys.Max() * 4) / 4;
+        if (x1 - x0 < 0.5) x1 = x0 + 0.5;
+        if (y1 - y0 < 0.25) y1 = y0 + 0.25;
+        double Px(double v) => L + (v - x0) / (x1 - x0) * (W - L - R);
+        double Py(double v) => H - B - (v - y0) / (y1 - y0) * (H - T - B);
+
+        _splitX = Px(Median(xs));
+        _splitY = Py(Median(ys));
+
+        var maxShare = Math.Max(1e-9, items.Max(s => s.SuccessShare));
+        var points = items.Select((s, i) => new Point(s, Px(xs[i]), Py(ys[i]), 4 + 11 * Math.Sqrt(s.SuccessShare / maxShare))).ToList();
+        _points = PlaceLabels(points).OrderByDescending(p => p.Radius).ToList();
+
+        _xTicks = [];
+        for (var e = (int)Math.Ceiling(x0); e <= Math.Floor(x1); e++)
+            _xTicks.Add(new Tick(Px(e), Fmt.Short(Math.Pow(10, e))));
+        _yTicks = [];
+        foreach (var v in new double[] { 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000 })
+        {
+            var lv = Math.Log10(1 + v);
+            if (lv >= y0 && lv <= y1) _yTicks.Add(new Tick(Py(lv), Fmt.Short(v)));
+        }
+    }
+
+    /// <summary>
+    /// Greedy placement: the most promising segments are labelled first, each at the first free spot
+    /// (right, left, above, below the point); a label that fits nowhere is left out.
+    /// </summary>
+    private List<Point> PlaceLabels(List<Point> points)
+    {
+        var plot = new Box(L, T, W - R, H - B);
+        var obstacles = points.Select(p => new Box(p.X - p.Radius, p.Y - p.Radius, p.X + p.Radius, p.Y + p.Radius)).ToList();
+        obstacles.Add(new Box(L + 6, T + 2, L + 140, T + 24));
+        obstacles.Add(new Box(W - R - 140, T + 2, W - R - 6, T + 24));
+        obstacles.Add(new Box(L + 6, H - B - 26, L + 120, H - B - 4));
+        obstacles.Add(new Box(W - R - 90, H - B - 26, W - R - 6, H - B - 4));
+
+        var placed = new Dictionary<SegmentStats, Point>(ReferenceEqualityComparer.Instance);
+        foreach (var p in points.OrderByDescending(p => p.Stats.Opportunity).ThenByDescending(p => p.Stats.Denominator))
+        {
+            if (placed.Count >= Labels) break;
+            var w = p.Stats.Name.Length * 6.6 + 4;
+            (Box Box, double X, double Y, string Anchor)[] candidates =
+            [
+                (new Box(p.X + p.Radius + 2, p.Y - 8, p.X + p.Radius + 2 + w, p.Y + 7), p.X + p.Radius + 3, p.Y + 4, "start"),
+                (new Box(p.X - p.Radius - 2 - w, p.Y - 8, p.X - p.Radius - 2, p.Y + 7), p.X - p.Radius - 3, p.Y + 4, "end"),
+                (new Box(p.X - w / 2, p.Y - p.Radius - 16, p.X + w / 2, p.Y - p.Radius - 1), p.X, p.Y - p.Radius - 4, "middle"),
+                (new Box(p.X - w / 2, p.Y + p.Radius + 1, p.X + w / 2, p.Y + p.Radius + 16), p.X, p.Y + p.Radius + 12, "middle"),
+            ];
+            foreach (var c in candidates)
+            {
+                if (c.Box.X1 < plot.X1 || c.Box.X2 > plot.X2 || c.Box.Y1 < plot.Y1 || c.Box.Y2 > plot.Y2) continue;
+                if (obstacles.Any(c.Box.Hits)) continue;
+                obstacles.Add(c.Box);
+                placed[p.Stats] = p with { Label = true, LabelX = c.X, LabelY = c.Y, Anchor = c.Anchor };
+                break;
+            }
+        }
+        return points.Select(p => placed.GetValueOrDefault(p.Stats, p)).ToList();
+    }
+
+    private static double Median(List<double> values)
+    {
+        var sorted = values.Order().ToArray();
+        return Stats.Median(sorted);
+    }
+
+    private string Tooltip(SegmentStats s) =>
+        $"{s.Name} — {SegmentAnalyzer.QuadrantName(s.Quadrant)}\n" +
+        $"Игр на itch.io: {(s.DenominatorEstimated ? "≈" : "")}{Fmt.N(s.Denominator)}\n" +
+        $"Медиана оценок (≥ {MinRatings}): {Fmt.N(s.Median, 0)}, сглаженная {Fmt.N(s.AdjMedian, 1)}\n" +
+        $"Шанс {Threshold}+ оценок: {Fmt.Pct(s.SuccessShare, 1)}\n" +
+        $"Тренд: {(s.Trend is { } t ? Fmt.Signed(t * 100, 0, "%") : "—")}\n" +
+        $"Opportunity: {Fmt.N(s.Opportunity, 0)}";
+}

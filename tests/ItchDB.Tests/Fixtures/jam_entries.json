@@ -1,0 +1,86 @@
+﻿{
+    "generated_on":  1790776794.28,
+    "jam_games":  [
+                      {
+                          "id":  739000,
+                          "created_at":  "2025-08-03 15:49:08",
+                          "coolness":  47,
+                          "game":  {
+                                       "cover":  "https://img.itch.zone/aW1nLzIzNDI1NTc1LnBuZw==/300x240%23c/7bAwu1.png",
+                                       "id":  3779622,
+                                       "title":  "HOW MANY DUDES? Pre-Alpha Demo",
+                                       "platforms":  [
+                                                         "web"
+                                                     ],
+                                       "short_text":  "(Pre-Alpha Demo) How many Dudes does it take to defeat a Gorilla? Try this chaotic autobattler roguelike and find out!",
+                                       "cover_color":  "#5a0014",
+                                       "url":  "https://bscotch.itch.io/how-many-dudes",
+                                       "user":  {
+                                                    "id":  82098,
+                                                    "url":  "https://bscotch.itch.io",
+                                                    "name":  "Butterscotch Shenanigans"
+                                                }
+                                   },
+                          "url":  "/jam/gmtk-2025/rate/3779622",
+                          "rating_count":  102
+                      },
+                      {
+                          "id":  742487,
+                          "created_at":  "2025-08-03 16:58:27",
+                          "coolness":  45,
+                          "game":  {
+                                       "cover":  "https://img.itch.zone/aW1nLzIyNjAzNDQ4LnBuZw==/300x240%23c/ncRBc%2F.png",
+                                       "id":  3778736,
+                                       "title":  "Love Letters",
+                                       "platforms":  [
+                                                         "windows",
+                                                         "osx",
+                                                         "web"
+                                                     ],
+                                       "short_text":  "Help shy student talk to their crush",
+                                       "cover_color":  "#FFFCF9",
+                                       "url":  "https://nozomu57.itch.io/love-letters",
+                                       "user":  {
+                                                    "id":  2211646,
+                                                    "url":  "https://nozomu57.itch.io",
+                                                    "name":  "Nozomu Games"
+                                                }
+                                   },
+                          "url":  "/jam/gmtk-2025/rate/3778736",
+                          "rating_count":  362
+                      },
+                      {
+                          "contributors":  [
+                                               {
+                                                   "url":  "https://kindanice.itch.io",
+                                                   "name":  "kindanice"
+                                               },
+                                               {
+                                                   "url":  "https://grass-fed-fish.itch.io",
+                                                   "name":  "grass_fed_fish"
+                                               }
+                                           ],
+                          "id":  734249,
+                          "created_at":  "2025-08-03 05:43:01",
+                          "coolness":  14,
+                          "game":  {
+                                       "cover":  "https://img.itch.zone/aW1nLzIyNDgwMDcyLnBuZw==/300x240%23c/OPJVYV.png",
+                                       "id":  3777397,
+                                       "title":  "speedloop",
+                                       "platforms":  [
+                                                         "web"
+                                                     ],
+                                       "short_text":  "speedrunning roguelike",
+                                       "cover_color":  "#480a30",
+                                       "url":  "https://kindanice.itch.io/speedloop",
+                                       "user":  {
+                                                    "id":  2729853,
+                                                    "url":  "https://kindanice.itch.io",
+                                                    "name":  "kindanice"
+                                                }
+                                   },
+                          "url":  "/jam/gmtk-2025/rate/3777397",
+                          "rating_count":  1359
+                      }
+                  ]
+}

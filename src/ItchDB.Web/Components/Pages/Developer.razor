@@ -1,0 +1,231 @@
+@page "/developer"
+@inherits AnalyticsPage
+
+<PageTitle>Для разработчика — ItchDB</PageTitle>
+
+<MudText Typo="Typo.h4">Для разработчика</MudText>
+<MudText Class="itch-muted mb-3">
+    Какие игры востребованы, где меньше конкуренции и что сопутствует успеху. Все цифры посчитаны по собранным данным с учётом фильтров в шапке.
+</MudText>
+
+<DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
+    @if (_vm is { } vm)
+    {
+        <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3" @bind-ActivePanelIndex="_tab">
+            <MudTabPanel Text="Выводы" Icon="@Icons.Material.Filled.TipsAndUpdates">
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="7">
+                        <MudPaper Class="pa-4" Outlined="true">
+                            <div class="itch-section-title">Выводы по данным</div>
+                            <InsightList Items="vm.Insights" />
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12" md="5">
+                        <MudPaper Class="pa-4 mb-3" Outlined="true">
+                            <div class="itch-section-title">От чего зависит число оценок</div>
+                            @if (vm.Drivers.AgeDoublingMultiplier is { } age)
+                            {
+                                <div class="itch-insight info">
+                                    <b>Возраст игры.</b> При прочих равных игра вдвое старше имеет в @Fmt.Times(age) больше оценок: оценки копятся годами, поэтому старые хиты сравнивают с новыми только по когортам.
+                                </div>
+                            }
+                            @if (vm.Drivers.ScreenshotsDoublingMultiplier is { } shots)
+                            {
+                                <div class="itch-insight @(shots > 1.05 ? "good" : "info")">
+                                    <b>Оформление страницы.</b> Вдвое больше скриншотов — @Fmt.Times(shots) к оценкам. Страница — это витрина: обложка, скриншоты и короткое описание решают, откроют ли игру.
+                                </div>
+                            }
+                            @foreach (var d in vm.TopDrivers)
+                            {
+                                <div class="itch-insight @(d.Multiplier > 1 ? "good" : "warn")">
+                                    <b>@d.Name</b> <span class="itch-muted">(@d.Group.ToLowerInvariant())</span> — @Fmt.Times(d.Multiplier) к оценкам при прочих равных,
+                                    шанс @A.Params.SuccessThreshold+ оценок @Fmt.Pct(d.SuccessWith) против @Fmt.Pct(d.SuccessWithout).
+                                </div>
+                            }
+                            @if (vm.Drivers.Sample < 200)
+                            {
+                                <MudText Typo="Typo.body2" Class="itch-muted">
+                                    Модели нужно ≥ 200 игр с прочитанными страницами (сейчас @vm.Drivers.Sample). Их собирает очередь деталей при глубоком и ежедневном сборе.
+                                </MudText>
+                            }
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => _tab = 5)" EndIcon="@Icons.Material.Filled.ArrowForward">Все факторы</MudButton>
+                        </MudPaper>
+                        <MudPaper Class="pa-4" Outlined="true">
+                            <div class="itch-section-title">Как читать показатели</div>
+                            <table class="itch-kv" style="font-size:.85rem">
+                                <tr><td>Медиана</td><td>сколько оценок набирает типичная заметная игра (≥ @F.MinRatings оценок). Оценки ≈ аудитория: оценивает малая доля игроков.</td></tr>
+                                <tr><td>Шанс успеха</td><td>доля всех игр сегмента на itch.io, набравших ≥ @A.Params.SuccessThreshold оценок, с 95% интервалом.</td></tr>
+                                <tr><td>Конкуренция</td><td>сколько игр в сегменте на itch.io — по счётчику «(N results)».</td></tr>
+                                <tr><td>Тренд</td><td>как меняется доля сегмента среди успешных игр в новых когортах против старых.</td></tr>
+                                <tr><td>Opportunity</td><td>0–100: спрос, шанс, низкая конкуренция и рост, взвешенные в настройках.</td></tr>
+                                <tr><td>Квадранты</td><td>спрос выше/ниже медианы × игр больше/меньше медианы.</td></tr>
+                            </table>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Карта возможностей" Icon="@Icons.Material.Filled.BubbleChart">
+                <MudPaper Class="pa-4 mb-3" Outlined="true">
+                    <div class="d-flex flex-wrap align-center gap-2 mb-2">
+                        <div class="itch-section-title mb-0">
+                            Спрос против конкуренции
+                            <FormulaTip Title="@Formulas.Quadrant.Title" Formula="@Formulas.Quadrant.Formula" Text="@Formulas.Quadrant.Text" />
+                        </div>
+                        <MudSpacer />
+                        <MudChipSet T="string" @bind-SelectedValue="_mapSet" @bind-SelectedValue:after="OnMapSetChanged" SelectionMode="SelectionMode.SingleSelection" CheckMark="false" Size="Size.Small" SelectedColor="Color.Primary" Variant="Variant.Outlined">
+                            <MudChip T="string" Value="@("tags")" Text="Теги" />
+                            <MudChip T="string" Value="@("genres")" Text="Жанры" />
+                            <MudChip T="string" Value="@("formats")" Text="Форматы" />
+                            <MudChip T="string" Value="@("all")" Text="Всё вместе" />
+                        </MudChipSet>
+                    </div>
+                    <OpportunityMap Items="vm.MapItems" Threshold="A.Params.SuccessThreshold" MinRatings="F.MinRatings" />
+                </MudPaper>
+                <MudGrid Spacing="3">
+                    @foreach (var (quadrant, items) in vm.ByQuadrant)
+                    {
+                        <MudItem xs="12" sm="6" lg="3">
+                            <MudPaper Class="pa-4 itch-card" Outlined="true" Style="@($"border-top:3px solid {QuadrantChip.Color(quadrant)}")">
+                                <MudText Typo="Typo.subtitle1" Style="@($"color:{QuadrantChip.Color(quadrant)};font-weight:700")">@SegmentAnalyzer.QuadrantName(quadrant)</MudText>
+                                <MudText Typo="Typo.caption" Class="itch-muted d-block mb-2">@SegmentAnalyzer.QuadrantHint(quadrant)</MudText>
+                                @foreach (var s in items)
+                                {
+                                    <div class="d-flex align-center py-1" style="font-size:.86rem">
+                                        <MudLink Href="@($"/tags/{Uri.EscapeDataString(s.Key)}")" Class="text-truncate" Style="flex:1;min-width:0">@s.Name</MudLink>
+                                        <span class="itch-muted mr-2">@Fmt.N(s.Median, 0)</span>
+                                        <b class="itch-num">@Fmt.N(s.Opportunity, 0)</b>
+                                    </div>
+                                }
+                                @if (items.Count == 0)
+                                {
+                                    <MudText Typo="Typo.body2" Class="itch-muted">Нет сегментов.</MudText>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Ниши" Icon="@Icons.Material.Filled.Leaderboard">
+                <SegmentTable Rows="vm.Niches" Params="A.Params" MinRatings="F.MinRatings" Title="Рейтинг ниш: жанры и теги" ExportName="niches"
+                              TrendCohorts="@vm.Cohorts" RowsPerPage="50" HideSmallByDefault="true" />
+            </MudTabPanel>
+
+            <MudTabPanel Text="Форматы" Icon="@Icons.Material.Filled.Devices">
+                <MudGrid Spacing="3" Class="mb-2">
+                    @foreach (var group in vm.FormatGroups)
+                    {
+                        <MudItem xs="12" md="6" lg="4">
+                            <MudPaper Class="pa-4 itch-card" Outlined="true">
+                                <div class="itch-section-title">@group.Title</div>
+                                <MudSimpleTable Dense="true" Elevation="0" Style="background:transparent">
+                                    <thead><tr><th></th><th style="text-align:right">Медиана</th><th style="text-align:right">Шанс</th><th style="text-align:right">к itch.io</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var s in group.Items)
+                                        {
+                                            var ratio = vm.All.SuccessShare > 0 ? s.SuccessShare / vm.All.SuccessShare : double.NaN;
+                                            <tr>
+                                                <td><MudLink Href="@($"/tags/{Uri.EscapeDataString(s.Key)}")">@s.Name</MudLink></td>
+                                                <td class="itch-num" style="text-align:right">@Fmt.N(s.Median, 0)</td>
+                                                <td class="itch-num" style="text-align:right">@(s.DenominatorEstimated ? "≈ " : "")@Fmt.Pct(s.SuccessShare, 1)</td>
+                                                <td class="itch-num" style="text-align:right;color:@(ratio >= 1.2 ? "#4CC38A" : ratio <= 0.8 ? "#FF8A8A" : "inherit")">@Fmt.Times(ratio)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </MudSimpleTable>
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+                <SegmentTable Rows="vm.Formats" Params="A.Params" MinRatings="F.MinRatings" Title="Все форматы" ExportName="formats" TrendCohorts="@vm.Cohorts" RowsPerPage="50" HideSmallByDefault="true" />
+            </MudTabPanel>
+
+            <MudTabPanel Text="Сочетания тегов" Icon="@Icons.Material.Filled.JoinInner">
+                <CombosTab Combos="vm.Combos" MinRatings="F.MinRatings" SuccessThreshold="A.Params.SuccessThreshold" />
+            </MudTabPanel>
+
+            <MudTabPanel Text="Факторы успеха" Icon="@Icons.Material.Filled.Insights">
+                <DriversTab Report="vm.Drivers" MinRatings="F.MinRatings" SuccessThreshold="A.Params.SuccessThreshold" />
+            </MudTabPanel>
+
+            <MudTabPanel Text="Проверка идеи" Icon="@Icons.Material.Filled.Lightbulb">
+                <ConceptTab Snapshot="A" Filter="F" InitialTags="@Tags" InitialGenre="@Genre" AutoRun="@(!string.IsNullOrEmpty(Tags) || !string.IsNullOrEmpty(Genre))" />
+            </MudTabPanel>
+        </MudTabs>
+    }
+</DataGate>
+
+@code {
+    private static readonly string[] TabKeys = ["insights", "map", "niches", "formats", "combos", "drivers", "concept"];
+
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+    [SupplyParameterFromQuery(Name = "tags")] public string? Tags { get; set; }
+    [SupplyParameterFromQuery(Name = "genre")] public string? Genre { get; set; }
+
+    private sealed record FormatGroup(string Title, List<SegmentStats> Items);
+
+    private sealed record Vm(
+        SegmentStats All,
+        List<Insight> Insights,
+        DriversReport Drivers,
+        List<DriverResult> TopDrivers,
+        List<SegmentStats> MapItems,
+        List<(Quadrant Quadrant, List<SegmentStats> Items)> ByQuadrant,
+        List<SegmentStats> Niches,
+        List<SegmentStats> Formats,
+        List<FormatGroup> FormatGroups,
+        List<TagComboResult> Combos,
+        string Cohorts);
+
+    private Vm? _vm;
+    private int _tab;
+    private string? _appliedTab;
+    private string _mapSet = "tags";
+
+    protected override void OnParametersSet()
+    {
+        if (Tab != _appliedTab)
+        {
+            _appliedTab = Tab;
+            var index = Array.IndexOf(TabKeys, Tab ?? "");
+            if (index >= 0) _tab = index;
+        }
+    }
+
+    private Task OnMapSetChanged() => RecomputeAsync();
+
+    protected override void Compute()
+    {
+        var all = A.All(F);
+        var genres = A.Genres(F);
+        var tags = A.Tags(F);
+        var formats = A.Formats(F);
+        var drivers = A.Drivers(F);
+
+        var topDrivers = drivers.Results.Where(r => r.Multiplier is not null && r.Significant && r.Group != "Витрина")
+            .OrderByDescending(r => Math.Abs(Math.Log(r.Multiplier!.Value))).Take(6).ToList();
+
+        var mapSource = _mapSet switch
+        {
+            "genres" => genres,
+            "formats" => formats,
+            "all" => genres.Concat(tags).Concat(formats).ToList(),
+            _ => tags,
+        };
+        var mapItems = mapSource.Where(s => !s.SmallSample && s.Opportunity is not null).ToList();
+
+        var byQuadrant = new[] { Quadrant.BlueOcean, Quadrant.RedOcean, Quadrant.QuietNiche, Quadrant.Trap }
+            .Select(q => (q, mapItems.Where(s => s.Quadrant == q).OrderByDescending(s => s.Opportunity).Take(8).ToList()))
+            .ToList();
+
+        var niches = genres.Concat(tags).OrderByDescending(s => s.Opportunity ?? -1).ToList();
+
+        var groups = formats.GroupBy(s => s.Segment.Kind)
+            .Select(g => new FormatGroup(Segments.KindName(g.Key), g.Where(s => s.Known > 0 && !s.SmallSample).OrderByDescending(s => s.SuccessShare).ToList()))
+            .Where(g => g.Items.Count > 0)
+            .ToList();
+
+        _vm = new Vm(all, A.Insights(F), drivers, topDrivers, mapItems, byQuadrant, niches, formats, groups, A.Combos(F), A.Analyzer(F).TrendCohorts);
+    }
+}

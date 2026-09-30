@@ -1,0 +1,35 @@
+@* Shows loading and empty states before the page content. *@
+@inject AnalyticsService Analytics
+
+@if (!Analytics.IsLoaded)
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="my-6">
+        <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+        <MudText Class="itch-muted">Загружаю данные в память…</MudText>
+    </MudStack>
+}
+else if (Snapshot.IsEmpty)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="my-4">
+        Данных пока нет. Откройте <MudLink Href="/data">«Сбор данных»</MudLink> и запустите «Быстрый старт» — первые выводы появятся через полчаса.
+    </MudAlert>
+}
+else if (Error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="my-4">Не удалось посчитать показатели: @Error</MudAlert>
+}
+else
+{
+    @if (Busy)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Size="Size.Small" Class="mb-2" />
+    }
+    @ChildContent
+}
+
+@code {
+    [Parameter, EditorRequired] public AnalyticsSnapshot Snapshot { get; set; } = AnalyticsSnapshot.Empty;
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

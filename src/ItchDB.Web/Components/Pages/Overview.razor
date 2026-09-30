@@ -1,0 +1,204 @@
+@page "/"
+@inherits AnalyticsPage
+
+<PageTitle>Обзор — ItchDB</PageTitle>
+
+<MudText Typo="Typo.h4">Обзор</MudText>
+<MudText Class="itch-muted mb-4">
+    Состояние itch.io по собранным данным. Все цифры учитывают фильтры «18+» и «Мин. оценок» в шапке.
+</MudText>
+
+<DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
+    @if (_vm is { } vm)
+    {
+        @if (D.YearsTotal > 0 && D.YearsComplete < D.YearsTotal)
+        {
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mb-4">
+                Оценённые игры собраны полностью за @D.YearsComplete из @D.YearsTotal лет — медианы и доли пока смещены к популярным играм.
+                Запустите <MudLink Href="/data">глубокий сбор</MudLink>, он продолжит с места остановки.
+            </MudAlert>
+        }
+
+        <MudGrid Spacing="3" Class="mb-2">
+            <MudItem xs="6" sm="4" md="3" lg="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Игр на itch.io" Value="@Fmt.Short(D.CatalogTotal)" Large="true"
+                         Hint="@($"в базе {Fmt.N(vm.Known)}")"
+                         Tip="Счётчик «(N results)» списка всех игр itch.io; в базе — сколько из них уже собрано." />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="3" lg="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Без единой оценки" Value="@Fmt.Pct(vm.ZeroShare)" Large="true" Color="#F5B84A"
+                         Hint="доля игр каталога"
+                         Formula="(игр на itch.io − игр с оценками) / игр на itch.io"
+                         Tip="Большинство игр никто не оценивает. Поэтому медианы считаются только по играм с оценками выше порога." />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="3" lg="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Медиана оценок" Value="@Fmt.N(vm.All.Median, 0)" Large="true"
+                         Hint="@($"по {Fmt.N(vm.All.Qualified)} играм с ≥ {F.MinRatings}")"
+                         Formula="@Formulas.Median(F.MinRatings).Formula" Tip="@Formulas.Median(F.MinRatings).Text" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="3" lg="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Лучшие 10%" Value="@($"{Fmt.N(vm.All.P90, 0)}+")" Large="true" Hint="оценок (P90)"
+                         Formula="@Formulas.Quantiles.Formula" Tip="@Formulas.Quantiles.Text" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="3" lg="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="@($"Шанс {A.Params.SuccessThreshold}+ оценок")" Value="@Fmt.Pct(vm.All.SuccessShare, 1)" Large="true" Color="#4CC38A"
+                         Hint="@($"95%: {Fmt.Pct(vm.All.SuccessLow, 1)}–{Fmt.Pct(vm.All.SuccessHigh, 1)}")"
+                         Formula="@Formulas.Success(A.Params.SuccessThreshold).Formula" Tip="@Formulas.Success(A.Params.SuccessThreshold).Text" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="3" lg="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Средняя оценка" Value="@Fmt.Stars(vm.All.MedianStars)" Large="true"
+                         Hint="медиана среди игр с оценками"
+                         Tip="Звёзды почти не различают игры: у большинства заметных игр 4–5★. Спрос лучше видно по числу оценок." />
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="5">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <div class="itch-section-title">Главные выводы</div>
+                    <InsightList Items="vm.Insights" Max="7" />
+                    <MudButton Href="/developer" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward">
+                        Все выводы для разработчика
+                    </MudButton>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="7">
+                <MudPaper Class="pa-4 mb-3" Outlined="true">
+                    <div class="itch-section-title">
+                        Сколько оценок набирают игры
+                        <FormulaTip Title="Распределение" Text="Столбец «0» — оценка по счётчику itch.io (все игры каталога минус игры с оценками), остальные — по собранным играм." />
+                    </div>
+                    <BarChart Items="vm.Distribution" Name="Игр" Height="260" Logarithmic="true" />
+                </MudPaper>
+                <MudPaper Class="pa-4" Outlined="true">
+                    <div class="itch-section-title">
+                        По годам выхода
+                        <FormulaTip Title="Когорты по годам" Text="Старые игры успели накопить больше оценок, поэтому сравнивайте форму, а не уровни. Для лет без фильтра года на itch.io показаны только собранные игры." />
+                    </div>
+                    <SeriesChart Series="vm.Years" Height="280" LeftTitle="Игр" RightTitle="Медиана оценок" />
+                    @if (vm.WithYear < vm.Known * 0.8)
+                    {
+                        <MudText Typo="Typo.caption" Class="itch-muted">
+                            Год выхода известен у @Fmt.N(vm.WithYear) из @Fmt.N(vm.Known) игр в базе. Остальные годы появятся после глубокого сбора (списки по годам и страницы игр).
+                        </MudText>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Spacing="3" Class="mt-1">
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <div class="itch-section-title">
+                        Жанры: спрос
+                        <FormulaTip Title="@Formulas.AdjMedian.Title" Formula="@Formulas.AdjMedian.Formula" Text="@Formulas.AdjMedian.Text" />
+                    </div>
+                    <BarChart Items="vm.Genres" Name="Сглаженная медиана оценок" Horizontal="true" Height="440" Decimals="1" Color="#5CC8FA" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4 mb-3" Outlined="true">
+                    <div class="d-flex align-center">
+                        <div class="itch-section-title">Лучшие ниши сейчас</div>
+                        <MudSpacer />
+                        <MudLink Href="/developer" Typo="Typo.caption">карта возможностей →</MudLink>
+                    </div>
+                    @foreach (var s in vm.Niches)
+                    {
+                        <div class="d-flex align-center py-1">
+                            <MudLink Href="@($"/tags/{Uri.EscapeDataString(s.Key)}")" Style="min-width:0" Class="text-truncate">@s.Name</MudLink>
+                            <MudSpacer />
+                            <span class="itch-muted mr-3" style="font-size:.8rem">медиана @Fmt.N(s.Median, 0) · игр @Fmt.Short(s.Denominator)</span>
+                            <QuadrantChip Value="s.Quadrant" />
+                            <span class="itch-num ml-3" style="width:28px;text-align:right"><b>@Fmt.N(s.Opportunity, 0)</b></span>
+                        </div>
+                    }
+                    @if (vm.Niches.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="itch-muted">Нужно больше тегов с оценёнными играми.</MudText>
+                    }
+                </MudPaper>
+                <MudPaper Class="pa-4" Outlined="true">
+                    <div class="d-flex align-center">
+                        <div class="itch-section-title">@(vm.HotAvailable ? "Горячее сейчас" : "Самые оценённые")</div>
+                        <MudSpacer />
+                        <MudLink Href="/tops" Typo="Typo.caption">все топы →</MudLink>
+                    </div>
+                    @foreach (var g in vm.TopGames)
+                    {
+                        <div class="d-flex align-center py-1 gap-3">
+                            <div style="flex:1;min-width:0"><GameCell Game="g" /></div>
+                            <span class="itch-num">@Fmt.N(g.Ratings) оц.</span>
+                            @if (vm.HotAvailable && g.DeltaRatings is { } d)
+                            {
+                                <span class="itch-num" style="color:#4CC38A">@Fmt.Signed(d)</span>
+                            }
+                        </div>
+                    }
+                    @if (!vm.HotAvailable)
+                    {
+                        <MudText Typo="Typo.caption" Class="itch-muted">«Горячее» появится после второго дня сбора: нужны два снимка, чтобы увидеть прирост.</MudText>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</DataGate>
+
+@code {
+    private sealed record Vm(
+        SegmentStats All,
+        int Known,
+        int WithYear,
+        double ZeroShare,
+        List<Insight> Insights,
+        List<ChartPoint> Distribution,
+        List<ChartSeries> Years,
+        List<ChartPoint> Genres,
+        List<SegmentStats> Niches,
+        List<GameRow> TopGames,
+        bool HotAvailable);
+
+    private Vm? _vm;
+
+    protected override void Compute()
+    {
+        var games = A.Games(F);
+        var all = A.All(F);
+        var zeroShare = all.Denominator > 0 ? (double)all.Bin0 / all.Denominator : double.NaN;
+
+        var known = games.Where(g => g.RatingsKnown).ToList();
+        (string Label, int From, int To)[] bins =
+            [("1–4", 1, 4), ("5–9", 5, 9), ("10–24", 10, 24), ("25–49", 25, 49), ("50–99", 50, 99), ("100–249", 100, 249), ("250–999", 250, 999), ("1000+", 1000, int.MaxValue)];
+        var distribution = new List<ChartPoint> { new("0", all.Bin0) };
+        distribution.AddRange(bins.Select(b => new ChartPoint(b.Label, known.Count(g => g.Ratings >= b.From && g.Ratings <= b.To))));
+
+        var years = A.Years(F).Where(y => y.Year >= 2015 && (y.TotalItch is not null || y.Known >= 20)).ToList();
+        var yearSeries = ChartData.Years(years);
+        var withYear = games.Count(g => g.Year is not null);
+
+        var genres = A.Genres(F).Where(s => s.Qualified > 0).OrderByDescending(s => s.AdjMedian)
+            .Select(s => new ChartPoint(s.Name, s.AdjMedian)).ToList();
+
+        var niches = A.Tags(F).Where(s => s.Opportunity is not null).OrderByDescending(s => s.Opportunity).Take(7).ToList();
+
+        var hotAvailable = games.Any(g => g.Hot > 0);
+        var top = hotAvailable
+            ? games.Where(g => g.Hot > 0).OrderByDescending(g => g.Hot).Take(6).ToList()
+            : games.OrderByDescending(g => g.Ratings).Take(6).ToList();
+
+        _vm = new Vm(all, games.Count, withYear, zeroShare, A.Insights(F), distribution, yearSeries, genres, niches, top, hotAvailable);
+    }
+}

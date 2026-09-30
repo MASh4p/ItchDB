@@ -1,0 +1,155 @@
+@page "/developers/{Id:long}"
+@inherits AnalyticsPage
+@inject DataQueries Queries
+
+<PageTitle>@(_vm?.Name ?? "Разработчик") — ItchDB</PageTitle>
+
+<DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
+    @if (_vm is null)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Разработчик не найден в базе.</MudAlert>
+    }
+    else
+    {
+        var vm = _vm;
+        <div class="d-flex flex-wrap align-center gap-3 mb-1">
+            <MudText Typo="Typo.h4">@vm.Name</MudText>
+            @if (vm.Dev?.Username is { } user && user != vm.Name)
+            {
+                <MudText Class="itch-muted">@user</MudText>
+            }
+            <MudSpacer />
+            @if (vm.Dev?.Url is { } url)
+            {
+                <MudButton Href="@url" Target="_blank" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" EndIcon="@Icons.Material.Filled.OpenInNew">Профиль на itch.io</MudButton>
+            }
+        </div>
+        <MudText Class="itch-muted mb-3">
+            @if (vm.Dev?.RegisteredAt is { } reg)
+            {
+                <span>На itch.io с @Fmt.Date(reg). </span>
+            }
+            Здесь только игры, которые уже есть в базе.
+        </MudText>
+
+        <MudGrid Spacing="3" Class="mb-1">
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Подписчики" Value="@Fmt.N(vm.Dev?.Followers)" Large="true"
+                         Hint="@(vm.Dev?.FollowersDelta30 is { } d ? $"{Fmt.Signed(d)} за 30 дней" : "рост появится после нескольких снимков")" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Игр в базе" Value="@Fmt.N(vm.Games.Count)" Large="true" Hint="@($"с ≥ {F.MinRatings} оценками: {Fmt.N(vm.Rated)}")" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Оценок всего" Value="@Fmt.N(vm.SumRatings)" Large="true" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Медиана оценок" Value="@Fmt.N(vm.Median, 0)" Large="true" Hint="@($"по itch.io {Fmt.N(vm.GlobalMedian, 0)}")"
+                         Formula="@Formulas.Median(F.MinRatings).Formula" Tip="@Formulas.Median(F.MinRatings).Text" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Средняя оценка" Value="@Fmt.Stars(vm.MeanStars)" Large="true" Hint="по играм с оценками" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Оценок на подписчика" Value="@Fmt.N(vm.RatingsPerFollower, 2)" Large="true"
+                         Tip="Сколько оценок собирают игры автора на одного подписчика. Высокое значение — игры находят аудиторию сами, низкое — держатся на подписчиках." />
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4 mb-3" Outlined="true">
+                    <div class="itch-section-title">Подписчики по дням</div>
+                    @if (_followers.Count < 2)
+                    {
+                        <MudText Typo="Typo.body2" Class="itch-muted">Нужно хотя бы два снимка профиля. Ежедневный сбор обновляет профили активных авторов.</MudText>
+                    }
+                    else
+                    {
+                        <SeriesChart Series="_followers" Height="240" Decimals="0" />
+                    }
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4 mb-3" Outlined="true">
+                    <div class="itch-section-title">Частые теги автора</div>
+                    <div class="d-flex flex-wrap gap-1">
+                        @foreach (var (tag, count) in vm.Tags)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Href="@($"/tags/{Uri.EscapeDataString(tag.Slug)}")">
+                                @Segments.DisplayName(tag) · @count
+                            </MudChip>
+                        }
+                        @if (vm.Tags.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="itch-muted">Теги появятся после чтения страниц игр.</MudText>
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudPaper Class="pa-2" Outlined="true">
+            <GamesTable Games="vm.Games" Title="Игры автора" ExportName="@($"developer-{Id}")" BayesMinVotes="A.Params.BayesMinVotes" />
+        </MudPaper>
+    }
+</DataGate>
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private sealed record Vm(string Name, DeveloperRow? Dev, List<GameRow> Games, int Rated, long SumRatings, double Median, double GlobalMedian,
+        double? MeanStars, double? RatingsPerFollower, List<(TagRow Tag, int Count)> Tags);
+
+    private Vm? _vm;
+    private List<ChartSeries> _followers = [];
+    private long _loadedId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId == Id) return;
+        _loadedId = Id;
+        var history = await Queries.DeveloperHistoryAsync(Id);
+        _followers = history.Count < 2 ? [] :
+            [new ChartSeries("Подписчики", history.Select(h => new ChartPoint(h.Day.ToString("dd.MM"), h.Followers)).ToList(), ChartKind.Area, Color: "#5CC8FA")];
+        await RecomputeAsync();
+    }
+
+    protected override void Compute()
+    {
+        D.Developers.TryGetValue(Id, out var dev);
+        var games = A.Games(F).Where(g => g.DeveloperId == Id).OrderByDescending(g => g.Ratings).ToList();
+        if (dev is null && games.Count == 0)
+        {
+            _vm = null;
+            return;
+        }
+
+        var rated = Stats.QualifiedRatings(games, F.MinRatings);
+        var global = Stats.QualifiedRatings(A.Games(F), F.MinRatings);
+        var stars = games.Where(g => g.RatingAvg is not null && g.Ratings > 0).Select(g => g.RatingAvg!.Value).ToList();
+        var sum = games.Sum(g => (long)g.Ratings);
+        var tags = games.SelectMany(g => g.TagIds).GroupBy(t => t)
+            .Select(g => (Tag: D.Tags.GetValueOrDefault(g.Key), Count: g.Count()))
+            .Where(t => t.Tag is { Kind: TagKind.Tag or TagKind.Genre })
+            .OrderByDescending(t => t.Count).Take(20)
+            .Select(t => (t.Tag!, t.Count)).ToList();
+        var name = dev?.Name ?? games.Select(g => g.AuthorName).FirstOrDefault(n => !string.IsNullOrEmpty(n)) ?? Id.ToString();
+
+        _vm = new Vm(name, dev, games, rated.Length, sum,
+            rated.Length > 0 ? Stats.Median(rated) : double.NaN, global.Length > 0 ? Stats.Median(global) : double.NaN,
+            stars.Count > 0 ? stars.Average() : null, dev?.Followers is > 0 ? (double)sum / dev.Followers.Value : null, tags);
+    }
+}

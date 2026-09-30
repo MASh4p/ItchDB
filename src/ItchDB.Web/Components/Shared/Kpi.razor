@@ -1,0 +1,26 @@
+@* A labelled metric value with an optional formula tooltip. *@
+<div class="itch-kpi @Class">
+    <div class="itch-kpi-label">
+        @Label
+        @if (!string.IsNullOrEmpty(Formula) || !string.IsNullOrEmpty(Tip))
+        {
+            <FormulaTip Title="@Label" Formula="@Formula" Text="@Tip" />
+        }
+    </div>
+    <div class="itch-kpi-value @(Large ? "" : "small")" style="@(Color is null ? "" : $"color:{Color}")">@Value</div>
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <div class="itch-kpi-hint">@Hint</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public string? Formula { get; set; }
+    [Parameter] public string? Tip { get; set; }
+    [Parameter] public bool Large { get; set; }
+    [Parameter] public string? Color { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

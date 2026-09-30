@@ -1,0 +1,35 @@
+@typeparam T
+@inject ExportService Export
+@inject ISnackbar Snackbar
+@* Exports the rows a table currently shows (with the page's filters). *@
+
+<MudMenu Icon="@Icons.Material.Outlined.FileDownload" Size="Size.Small" Dense="true" AnchorOrigin="Origin.BottomRight"
+         TransformOrigin="Origin.TopRight" Disabled="_busy" aria-label="Экспорт">
+    <MudMenuItem OnClick="@(() => RunAsync(ExportFormat.Csv))">CSV (Excel, «;»)</MudMenuItem>
+    <MudMenuItem OnClick="@(() => RunAsync(ExportFormat.Excel))">Excel (.xlsx)</MudMenuItem>
+</MudMenu>
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = "export";
+    [Parameter, EditorRequired] public Func<IEnumerable<T>> Rows { get; set; } = () => [];
+    [Parameter, EditorRequired] public IReadOnlyList<ExportColumn<T>> Columns { get; set; } = [];
+
+    private bool _busy;
+
+    private async Task RunAsync(ExportFormat format)
+    {
+        _busy = true;
+        try
+        {
+            await Export.DownloadAsync(Name, Rows(), Columns, format);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Не удалось выгрузить: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,400 @@
+@page "/games/{Id:long}"
+@inherits AnalyticsPage
+@inject DataQueries Queries
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_vm?.Game.Title ?? "Игра") — ItchDB</PageTitle>
+
+<DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
+    @if (_vm is null)
+    {
+        @if (!Computing)
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Игры с id @Id нет в базе (или она скрыта фильтром «18+»).</MudAlert>
+        }
+    }
+    else
+    {
+        var g = _vm.Game;
+        <div class="d-flex flex-wrap gap-5 mb-4">
+            @if (!string.IsNullOrEmpty(g.CoverUrl))
+            {
+                <img src="@g.CoverUrl" alt="" class="itch-cover-lg" loading="lazy" referrerpolicy="no-referrer" />
+            }
+            <div style="flex:1;min-width:300px">
+                <MudText Typo="Typo.h4">@g.Title</MudText>
+                <MudText Class="mb-2">
+                    @if (g.DeveloperId is { } devId)
+                    {
+                        <MudLink Href="@($"/developers/{devId}")">@(g.AuthorName ?? _vm.Developer?.Name ?? "автор")</MudLink>
+                    }
+                    else
+                    {
+                        <span class="itch-muted">@g.AuthorName</span>
+                    }
+                    @if (_vm.Developer?.Followers is { } followers)
+                    {
+                        <span class="itch-muted"> · @Fmt.Count(followers, "подписчик", "подписчика", "подписчиков")</span>
+                    }
+                </MudText>
+                @if (!string.IsNullOrEmpty(g.ShortText))
+                {
+                    <MudText Class="itch-muted mb-3">@g.ShortText</MudText>
+                }
+                <div class="d-flex flex-wrap gap-1 mb-3">
+                    @if (g.Genre is not null)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" Href="@($"/tags/{g.Genre}")">@GamesTable.GenreName(g.Genre)</MudChip>
+                    }
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Fmt.Price(g)</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Fmt.Platforms(g.Platforms)</MudChip>
+                    @if (g.Status != GameStatus.Unknown)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Fmt.Status(g.Status)</MudChip>
+                    }
+                    @if (g.IsFeatured)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">Featured @Fmt.Date(g.FeaturedAt)</MudChip>
+                    }
+                    @if (g.IsJamEntry)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">Джем</MudChip>
+                    }
+                    @if (g.Ai == AiUsage.UsesAi)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Генеративный ИИ</MudChip>
+                    }
+                    @if (g.IsNsfw)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">18+</MudChip>
+                    }
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <MudButton Href="@g.Url" Target="_blank" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" EndIcon="@Icons.Material.Filled.OpenInNew">Открыть на itch.io</MudButton>
+                    <MudButton OnClick="TrackAsync" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.TrackChanges">Отслеживать позиции</MudButton>
+                </div>
+                <table class="itch-kv mt-3" style="font-size:.85rem">
+                    <tr><td>Опубликована</td><td>@(g.PublishedAt is { } p ? Fmt.Date(p) : g.Year?.ToString() ?? "—")</td></tr>
+                    @if (_entity?.ReleaseDate is { } rel)
+                    {
+                        <tr><td>Дата релиза</td><td>@Fmt.Date(rel)</td></tr>
+                    }
+                    @if (_entity?.UpdatedAt is { } upd)
+                    {
+                        <tr><td>Обновлена</td><td>@Fmt.Date(upd)</td></tr>
+                    }
+                    <tr><td>Впервые замечена</td><td>@Fmt.Date(g.FirstSeenAt)</td></tr>
+                    <tr><td>Страница игры</td><td>@(_entity?.DetailsFetchedAt is { } df ? $"прочитана {Fmt.Ago(df)}" : "ещё не прочитана — теги и даты только из списков")</td></tr>
+                    @if (g.HasDetails)
+                    {
+                        <tr><td>Скриншотов</td><td>@g.Screenshots</td></tr>
+                    }
+                </table>
+            </div>
+        </div>
+
+        <MudGrid Spacing="3" Class="mb-1">
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Оценок" Value="@(g.RatingsKnown ? Fmt.N(g.Ratings) : "?")" Large="true"
+                         Hint="@(g.DeltaRatings is { } d ? $"{Fmt.Signed(d)} за {Fmt.Count(g.DeltaDays, "день", "дня", "дней")}" : "прирост появится со снимками")" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Средняя оценка" Value="@Fmt.Stars(g.RatingAvg)" Large="true"
+                         Hint="@(g.WeightedRating > 0 ? $"WR {g.WeightedRating.ToString("0.00", Fmt.Ru)}" : null)"
+                         Formula="@Formulas.WeightedRating(A.Params.BayesMinVotes).Formula" Tip="@Formulas.WeightedRating(A.Params.BayesMinVotes).Text" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Комментариев" Value="@Fmt.N(g.Comments)" Large="true"
+                         Hint="@(g.DeltaComments is { } dc ? $"{Fmt.Signed(dc)} за окно снимков" : null)" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Лучше, чем" Value="@Fmt.Pct(_vm.GlobalBetter)" Large="true" Hint="игр itch.io по числу оценок"
+                         Tip="Доля всех игр каталога (включая игры без оценок), у которых оценок меньше." />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Hot" Value="@(g.Hot > 0 ? Fmt.N(g.Hot, 2) : "—")" Large="true"
+                         Hint="@(g.PopularRank is { } pr ? $"#{pr} в «Популярном»" : null)"
+                         Formula="@Formulas.Hot.Formula" Tip="@Formulas.Hot.Text" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Просмотров ≈" Value="@(_vm.Audience.BelowDetection ? "мало" : Fmt.Short(_vm.Audience.Views))" Large="true" Color="#5CC8FA"
+                         Hint="@($"{Fmt.Short(_vm.Audience.ViewsLow)}–{Fmt.Short(_vm.Audience.ViewsHigh)}{(_vm.Audience.Calibrated ? " · калибровано" : "")}")"
+                         Formula="@Formulas.Audience.Formula" Tip="@Formulas.Audience.Text" />
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="7">
+                <MudPaper Class="pa-4 mb-3" Outlined="true">
+                    <div class="itch-section-title">История по дням</div>
+                    @if (_vm.History.Count > 0 && _vm.History[0].Points.Count >= 2)
+                    {
+                        <SeriesChart Series="_vm.History" Height="260" LeftTitle="Оценок" RightTitle="Комментариев" />
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="itch-muted">
+                            Снимков пока @(_history.Count). График появится, когда игра попадёт в сбор хотя бы в два разных дня.
+                        </MudText>
+                    }
+                </MudPaper>
+
+                <MudPaper Class="pa-4 mb-3" Outlined="true">
+                    <div class="itch-section-title">
+                        Место в сегментах
+                        <FormulaTip Title="Место в сегменте" Formula="лучше, чем = (игр без оценок + игр с меньшим числом оценок) / игр в сегменте на itch.io"
+                                    Text="Показывает, насколько игра выделяется среди своих тегов. Место — по числу оценок среди собранных игр сегмента." />
+                    </div>
+                    @if (_vm.Segments.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="itch-muted">У игры пока нет тегов в базе — откройте её страницу через глубокий сбор.</MudText>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true" Hover="true" Elevation="0" Style="background:transparent">
+                            <thead>
+                                <tr><th>Сегмент</th><th style="text-align:right">Место</th><th style="text-align:right">Лучше, чем</th><th style="text-align:right">Медиана</th><th style="text-align:right">P90</th><th>Квадрант</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var s in _vm.Segments)
+                                {
+                                    <tr>
+                                        <td><MudLink Href="@($"/tags/{Uri.EscapeDataString(s.Stats.Key)}")">@s.Stats.Name</MudLink></td>
+                                        <td class="itch-num" style="text-align:right">#@Fmt.N(s.Rank) <span class="itch-muted">из @Fmt.Short(s.Stats.Denominator)</span></td>
+                                        <td class="itch-num" style="text-align:right">@Fmt.Pct(s.Better)</td>
+                                        <td class="itch-num" style="text-align:right">@Fmt.N(s.Stats.Median, 0)</td>
+                                        <td class="itch-num" style="text-align:right">@Fmt.N(s.Stats.P90, 0)</td>
+                                        <td><QuadrantChip Value="s.Stats.Quadrant" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudPaper>
+
+                <MudPaper Class="pa-4" Outlined="true">
+                    <div class="itch-section-title">Похожие игры (по общим тегам)</div>
+                    @if (_vm.Similar.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="itch-muted">Не нашлось игр хотя бы с двумя общими тегами.</MudText>
+                    }
+                    @foreach (var (other, sim) in _vm.Similar)
+                    {
+                        <div class="d-flex align-center py-1 gap-3">
+                            <div style="flex:1;min-width:0"><GameCell Game="other" /></div>
+                            <span class="itch-muted" style="font-size:.78rem">сходство @Fmt.Pct(sim)</span>
+                            <span class="itch-num" style="width:90px;text-align:right">@Fmt.N(other.Ratings) оц.</span>
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="5">
+                <MudPaper Class="pa-4 mb-3" Outlined="true">
+                    <div class="itch-section-title">
+                        Позиции в списках itch.io
+                        <FormulaTip Title="Позиции" Text="@($"Последний обход списков «Популярное» ({Fmt.Date(D.PositionsDay)}). Показаны соседи сверху и снизу: с кем игра делит видимость.")" />
+                    </div>
+                    @if (_vm.Positions.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="itch-muted">В собранных списках «Популярное» игры нет. Добавьте её в отслеживание — сборщик будет искать её глубже.</MudText>
+                    }
+                    @foreach (var pos in _vm.Positions.Take(8))
+                    {
+                        <div class="mb-3">
+                            <div class="d-flex align-center">
+                                <b>@Positions.ListName(D, pos.ListKey)</b>
+                                <MudSpacer />
+                                <span class="itch-num" style="font-size:1.1rem">#@pos.Position</span>
+                                @if (_bestPositions.TryGetValue(pos.ListKey, out var best) && best < pos.Position)
+                                {
+                                    <span class="itch-muted ml-2" style="font-size:.78rem">лучшее #@best</span>
+                                }
+                            </div>
+                            @foreach (var (np, ng) in pos.Neighbors)
+                            {
+                                <div class="d-flex align-center gap-2 px-2 @(ng.Id == g.Id ? "itch-neighbor-self" : "")" style="font-size:.82rem">
+                                    <span class="itch-num itch-muted" style="width:36px">#@np</span>
+                                    <MudLink Href="@($"/games/{ng.Id}")" Class="text-truncate" Style="flex:1;min-width:0">@ng.Title</MudLink>
+                                    <span class="itch-num itch-muted">@Fmt.N(ng.Ratings)</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </MudPaper>
+
+                <MudPaper Class="pa-4 mb-3" Outlined="true">
+                    <div class="itch-section-title">
+                        Оценка аудитории
+                        <FormulaTip Title="@Formulas.Audience.Title" Formula="@Formulas.Audience.Formula" Text="@Formulas.Audience.Text" />
+                    </div>
+                    <table class="itch-kv">
+                        <tr><td>Просмотры страницы</td><td>≈ @Fmt.Short(_vm.Audience.Views) <span class="itch-muted">(@Fmt.Short(_vm.Audience.ViewsLow)–@Fmt.Short(_vm.Audience.ViewsHigh))</span></td></tr>
+                        @if (_vm.Audience.BrowserPlays is { } plays)
+                        {
+                            <tr><td>Запуски в браузере</td><td>≈ @Fmt.Short(plays)</td></tr>
+                        }
+                        @if (_vm.Audience.Downloads is { } dl)
+                        {
+                            <tr><td>Скачивания</td><td>≈ @Fmt.Short(dl)</td></tr>
+                        }
+                    </table>
+                    <MudText Typo="Typo.caption" Class="itch-muted">
+                        @(_vm.Audience.Calibrated
+                            ? "Коэффициенты откалиброваны по вашим играм (раздел «Моя игра»)."
+                            : "Грубая оценка по типичной доле оценивающих. Для точности откалибруйте по своим играм в разделе «Моя игра».")
+                    </MudText>
+                </MudPaper>
+
+                <MudPaper Class="pa-4 mb-3" Outlined="true">
+                    <div class="itch-section-title">Теги</div>
+                    <div class="d-flex flex-wrap gap-1">
+                        @foreach (var t in _vm.Tags)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Href="@($"/tags/{Uri.EscapeDataString(t.Slug)}")">@Segments.DisplayName(t)</MudChip>
+                        }
+                    </div>
+                </MudPaper>
+
+                @if (_jams.Count > 0)
+                {
+                    <MudPaper Class="pa-4" Outlined="true">
+                        <div class="itch-section-title">Джемы</div>
+                        @foreach (var j in _jams)
+                        {
+                            <div class="d-flex align-center py-1 gap-2">
+                                <MudLink Href="@($"/jams/{j.Jam.Id}")" Class="text-truncate" Style="flex:1;min-width:0">@j.Jam.Title</MudLink>
+                                <span class="itch-muted" style="font-size:.8rem">@Fmt.Date(j.Jam.EndAt)</span>
+                                @if (j.Entry.JamRatingCount is { } jr)
+                                {
+                                    <span class="itch-num" style="font-size:.8rem">@Fmt.Count(jr, "оценка", "оценки", "оценок") на джеме</span>
+                                }
+                            </div>
+                        }
+                    </MudPaper>
+                }
+            </MudItem>
+        </MudGrid>
+    }
+</DataGate>
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private sealed record SegmentPlace(SegmentStats Stats, int Rank, double? Better);
+
+    private sealed record Vm(
+        GameRow Game,
+        DeveloperRow? Developer,
+        AudienceEstimate Audience,
+        double? GlobalBetter,
+        List<ListPosition> Positions,
+        List<SegmentPlace> Segments,
+        List<(GameRow Game, double Similarity)> Similar,
+        List<ChartSeries> History,
+        List<TagRow> Tags);
+
+    private Vm? _vm;
+    private long _loadedId = -1;
+    private Game? _entity;
+    private List<GameSnapshot> _history = [];
+    private List<GameJamEntry> _jams = [];
+    private Dictionary<string, int> _bestPositions = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId == Id) return;
+        _loadedId = Id;
+        _entity = await Queries.GameAsync(Id);
+        _history = await Queries.GameHistoryAsync(Id);
+        _jams = await Queries.GameJamsAsync(Id);
+        var positions = await Queries.PositionHistoryAsync(Id);
+        _bestPositions = positions.GroupBy(p => p.ListKey).ToDictionary(x => x.Key, x => x.Min(p => p.Position));
+        await RecomputeAsync();
+    }
+
+    private async Task TrackAsync()
+    {
+        if (_vm is null) return;
+        await Queries.AddTrackedAsync(_vm.Game.Url, isOwn: false, maxPages: 5, note: null);
+        Snackbar.Add("Игра добавлена в отслеживание — позиции появятся в разделе «Моя игра».", Severity.Success);
+    }
+
+    protected override void Compute()
+    {
+        if (!D.GamesById.TryGetValue(Id, out var g) || !F.Includes(g))
+        {
+            _vm = null;
+            return;
+        }
+
+        var all = A.All(F);
+        var ratedAll = A.Games(F).Where(x => x.Ratings > 0).Select(x => (double)x.Ratings).Order().ToArray();
+        double? globalBetter = all.Denominator > 0
+            ? Math.Min(1, (Math.Max(0, all.Denominator - ratedAll.Length) + Stats.PercentRank(ratedAll, g.Ratings) * ratedAll.Length) / all.Denominator)
+            : null;
+
+        var places = new List<SegmentPlace>();
+        foreach (var s in A.SegmentsOf(F, g).Where(x => x.Known >= 10))
+        {
+            var rated = Segments.Members(D, s.Segment, F).Where(x => x.Ratings > 0).Select(x => (double)x.Ratings).Order().ToArray();
+            var rank = rated.Count(r => r > g.Ratings) + 1;
+            double? better = s.TotalItch is { } total && total >= rated.Length && total > 0
+                ? (total - rated.Length + Stats.PercentRank(rated, g.Ratings) * rated.Length) / total
+                : null;
+            places.Add(new SegmentPlace(s, rank, better));
+        }
+        places = places.OrderBy(p => p.Stats.SmallSample ? 1 : 0)
+            .ThenBy(p => p.Stats.Segment.Kind == SegmentKind.Genre ? 0 : 1)
+            .ThenByDescending(p => p.Stats.Denominator).ToList();
+
+        var similar = new List<(GameRow, double)>();
+        if (g.TagIds.Length >= 2)
+        {
+            foreach (var other in A.Games(F))
+            {
+                if (other.Id == g.Id || other.TagIds.Length < 2) continue;
+                var shared = Shared(g.TagIds, other.TagIds);
+                if (shared < 2) continue;
+                similar.Add((other, (double)shared / (g.TagIds.Length + other.TagIds.Length - shared)));
+            }
+            similar = similar.OrderByDescending(x => x.Item2).ThenByDescending(x => x.Item1.Ratings).Take(12).ToList();
+        }
+
+        var history = new List<ChartSeries>
+        {
+            new("Оценок", _history.Where(h => h.RatingCount is not null).Select(h => new ChartPoint(Fmt.Date(h.Day), h.RatingCount!.Value)).ToList(), ChartKind.Line, Color: ItchTheme.Accent),
+            new("Комментариев", _history.Where(h => h.CommentsCount is not null).Select(h => new ChartPoint(Fmt.Date(h.Day), h.CommentsCount!.Value)).ToList(), ChartKind.Line, SecondAxis: true, Color: "#5CC8FA"),
+        };
+
+        var tags = g.TagIds.Select(id => D.Tags.GetValueOrDefault(id)).OfType<TagRow>()
+            .OrderBy(t => t.Kind).ThenByDescending(t => D.Members(t.Id).Count).ToList();
+
+        _vm = new Vm(g, g.DeveloperId is { } dev ? D.Developers.GetValueOrDefault(dev) : null, Audience.Estimate(g, A.Params), globalBetter,
+            Positions.For(D, g.Id), places, similar, history, tags);
+    }
+
+    private static int Shared(int[] a, int[] b)
+    {
+        int i = 0, j = 0, n = 0;
+        while (i < a.Length && j < b.Length)
+        {
+            if (a[i] == b[j]) { n++; i++; j++; }
+            else if (a[i] < b[j]) i++;
+            else j++;
+        }
+        return n;
+    }
+}

@@ -1,0 +1,97 @@
+@page "/tops"
+@inherits AnalyticsPage
+
+<PageTitle>Топы — ItchDB</PageTitle>
+
+<div class="d-flex flex-wrap align-center gap-3 mb-1">
+    <MudText Typo="Typo.h4">Топы</MudText>
+    <MudSpacer />
+    <MudSelect T="string" @bind-Value="_period" @bind-Value:after="RecomputeAsync" Label="Вышли" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Style="max-width:220px">
+        @foreach (var p in Periods)
+        {
+            <MudSelectItem T="string" Value="@p.Key">@p.Name</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSelect T="string" @bind-Value="_genre" @bind-Value:after="RecomputeAsync" Label="Жанр" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Style="max-width:220px">
+        <MudSelectItem T="string" Value="@Any">Все жанры</MudSelectItem>
+        @foreach (var g in ItchCatalog.Genres.OrderBy(g => g.RussianName))
+        {
+            <MudSelectItem T="string" Value="@g.Slug">@g.RussianName</MudSelectItem>
+        }
+    </MudSelect>
+</div>
+<MudText Class="itch-muted mb-3">
+    Спрос — сколько людей оценили игру. Отзывы — качество с поправкой на малое число голосов. Горячее — кто набирает оценки прямо сейчас.
+</MudText>
+
+<DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
+    @if (_vm is { } vm)
+    {
+        <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3" @bind-ActivePanelIndex="_tab">
+            <MudTabPanel Text="По спросу">
+                <GamesTable Games="vm.Demand" Title="Больше всего оценок" Subtitle="число оценок ≈ размер аудитории" ExportName="top-demand" ShowWr="true" BayesMinVotes="A.Params.BayesMinVotes" />
+            </MudTabPanel>
+            <MudTabPanel Text="По отзывам">
+                <GamesTable Games="vm.Reviews" Title="Лучшие по оценкам" Subtitle="@($"взвешенный рейтинг, от {A.Params.BayesMinVotes} оценок")" ExportName="top-reviews" BayesMinVotes="A.Params.BayesMinVotes" />
+            </MudTabPanel>
+            <MudTabPanel Text="Горячее">
+                @if (vm.Hot.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+                        Для «Горячего» нужны снимки хотя бы за два дня: прирост оценок считается между ними. Оставьте приложение открытым — ежедневный сбор сделает это сам.
+                    </MudAlert>
+                }
+                <GamesTable Games="vm.Hot" Title="Набирают оценки сейчас" Subtitle="@($"прирост за последние {DatasetLoader.DeltaWindowDays} дней с поправкой на возраст")" ExportName="top-hot" ShowHot="true" ShowDelta="true" ShowWr="false" BayesMinVotes="A.Params.BayesMinVotes" />
+            </MudTabPanel>
+            <MudTabPanel Text="Новые и растущие">
+                <GamesTable Games="vm.Rising" Title="Новинки последних 90 дней" Subtitle="по числу оценок в день с момента выхода" ExportName="top-rising" ShowDelta="true" ShowWr="false" BayesMinVotes="A.Params.BayesMinVotes" />
+            </MudTabPanel>
+            <MudTabPanel Text="Featured">
+                <GamesTable Games="vm.Featured" Title="Выбор редакции itch.io" Subtitle="от последних к ранним" ExportName="top-featured" ShowFeatured="true" ShowRank="false" BayesMinVotes="A.Params.BayesMinVotes" />
+            </MudTabPanel>
+            <MudTabPanel Text="Обсуждаемые">
+                <GamesTable Games="vm.Comments" Title="Больше всего комментариев" ExportName="top-comments" ShowWr="false" BayesMinVotes="A.Params.BayesMinVotes" />
+            </MudTabPanel>
+        </MudTabs>
+    }
+</DataGate>
+
+@code {
+    private const string Any = "any";
+    private const int Take = 500;
+
+    private static readonly (string Key, string Name, int? Days)[] Periods =
+    [
+        ("all", "За всё время", null),
+        ("365", "За последний год", 365),
+        ("90", "За 90 дней", 90),
+        ("30", "За 30 дней", 30),
+    ];
+
+    private sealed record Vm(List<GameRow> Demand, List<GameRow> Reviews, List<GameRow> Hot, List<GameRow> Rising, List<GameRow> Featured, List<GameRow> Comments);
+
+    private Vm? _vm;
+    private string _period = "all";
+    private string _genre = Any;
+    private int _tab;
+
+    protected override void Compute()
+    {
+        IEnumerable<GameRow> pool = A.Games(F);
+        if (_genre != Any && Segments.Genres(D).FirstOrDefault(s => s.Key == _genre) is { } seg) pool = Segments.Members(D, seg, F);
+        var all = pool.ToList();
+
+        var days = Periods.FirstOrDefault(p => p.Key == _period).Days;
+        var inPeriod = days is { } d ? all.Where(g => g.AgeDays(A.Now) <= d && (g.PublishedAt is not null || g.Year is not null)).ToList() : all;
+
+        var demand = inPeriod.Where(g => g.Ratings > 0).OrderByDescending(g => g.Ratings).ThenByDescending(g => g.RatingAvg).Take(Take).ToList();
+        var reviews = inPeriod.Where(g => g.Ratings >= A.Params.BayesMinVotes).OrderByDescending(g => g.WeightedRating).Take(Take).ToList();
+        var hot = all.Where(g => g.Hot > 0).OrderByDescending(g => g.Hot).Take(Take).ToList();
+        var rising = all.Where(g => g.PublishedAt is not null && g.AgeDays(A.Now) <= 90 && g.Ratings > 0)
+            .OrderByDescending(g => g.Ratings / Math.Max(1, g.AgeDays(A.Now))).Take(Take).ToList();
+        var featured = all.Where(g => g.IsFeatured).OrderByDescending(g => g.FeaturedAt ?? DateTime.MinValue).Take(Take).ToList();
+        var comments = inPeriod.Where(g => g.Comments > 0).OrderByDescending(g => g.Comments).Take(Take).ToList();
+
+        _vm = new Vm(demand, reviews, hot, rising, featured, comments);
+    }
+}

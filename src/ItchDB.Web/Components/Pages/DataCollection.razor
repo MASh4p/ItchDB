@@ -1,0 +1,458 @@
+@page "/data"
+@implements IDisposable
+@inject CrawlCoordinator Crawl
+@inject NetworkStatus Net
+@inject CoverageReport Coverage
+@inject CursorStore Cursors
+@inject SettingsService Settings
+@inject CookieStore Cookies
+@inject ISnackbar Snackbar
+
+<PageTitle>Сбор данных — ItchDB</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Сбор данных</MudText>
+<MudText Class="itch-muted mb-4" Style="max-width:1000px">
+    У itch.io нет открытого API каталога, поэтому ItchDB читает публичные страницы как обычный браузер — по одному запросу
+    раз в @Fmt.N(Settings.Current.RequestIntervalMs / 1000.0, 1)–@Fmt.N((Settings.Current.RequestIntervalMs + Settings.Current.RequestJitterMs) / 1000.0, 1) с.
+    Данные хранятся локально, каждый запуск продолжает с места остановки. Сбор идёт только пока приложение открыто.
+</MudText>
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" lg="7">
+        <MudPaper Class="pa-4 itch-card">
+            <div class="d-flex align-center mb-2">
+                <MudText Typo="Typo.h6">Текущий сбор</MudText>
+                <MudSpacer />
+                @if (Crawl.State == CrawlState.Running)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Pause" OnClick="Crawl.Pause" Class="mr-2">Пауза</MudButton>
+                }
+                else if (Crawl.State == CrawlState.Paused)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="Crawl.Resume" Class="mr-2">Продолжить</MudButton>
+                }
+                @if (Crawl.IsBusy && Crawl.State != CrawlState.Stopping)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop" OnClick="Crawl.Stop">Остановить</MudButton>
+                }
+            </div>
+
+            @if (Crawl.IsBusy)
+            {
+                <MudText Typo="Typo.subtitle1">
+                    @(Crawl.Profile is { } p ? CrawlProfiles.Name(p) : "") · @StateLabel
+                    <span class="itch-muted"> — запущен @Fmt.Ago(Crawl.StartedAt) (@Crawl.Trigger)</span>
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mt-2">Задача @Crawl.JobIndex из @Crawl.JobCount: <b>@Crawl.CurrentJob</b></MudText>
+                <MudProgressLinear Color="Color.Primary" Value="@JobProgress" Class="my-2" Rounded="true" Size="Size.Medium" />
+                @if (Crawl.StepText is { } step)
+                {
+                    <MudText Typo="Typo.body2" Class="itch-muted" Style="word-break:break-all">@step</MudText>
+                    @if (Crawl.StepTotal > 0)
+                    {
+                        <MudProgressLinear Color="Color.Info" Value="@(100.0 * Crawl.StepDone / Math.Max(1, Crawl.StepTotal))" Class="my-2" Rounded="true" />
+                    }
+                }
+                <div class="d-flex flex-wrap gap-6 mt-3">
+                    <Kpi Label="Запросов" Value="@($"{Fmt.N(Crawl.Requests)} / {Fmt.N(Crawl.RequestBudget)}")" />
+                    <Kpi Label="Игр обновлено" Value="@Fmt.N(Crawl.GamesUpserted)" />
+                    <Kpi Label="Ошибок сети" Value="@Fmt.N(Crawl.Errors)" />
+                    <Kpi Label="Ошибок разбора" Value="@Fmt.N(Crawl.ParseErrors)" />
+                </div>
+            }
+            else
+            {
+                <MudText Class="itch-muted">Сейчас ничего не собирается.</MudText>
+                @if (Crawl.LastStatus is { } last)
+                {
+                    <MudAlert Severity="@(last == CrawlRunStatus.Completed ? Severity.Success : last == CrawlRunStatus.Failed ? Severity.Error : Severity.Info)" Dense="true" Class="mt-3">
+                        Последний запуск @Fmt.Ago(Crawl.LastFinishedAt): @RunStatusName(last). @Crawl.LastMessage
+                    </MudAlert>
+                }
+                <MudText Typo="Typo.body2" Class="mt-3">
+                    Автообновление: <b>@(Settings.Current.AutoDailyEnabled ? $"раз в {Settings.Current.DailyIntervalHours} ч" : "выключено")</b>.
+                    Последнее успешное: @Fmt.Ago(_lastSuccess).
+                    @if (Settings.Current.AutoDailyEnabled && _nextDue is { } next)
+                    {
+                        <span>Следующее: @(next <= DateTime.UtcNow ? "в ближайшую минуту" : Fmt.Local(next)).</span>
+                    }
+                </MudText>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" lg="5">
+        <MudPaper Class="pa-4 itch-card">
+            <MudText Typo="Typo.h6" Class="mb-2">Сеть и Cloudflare</MudText>
+            <div class="d-flex flex-wrap gap-6">
+                <Kpi Label="Запросов за сессию" Value="@Fmt.N(Net.TotalRequests)" />
+                <Kpi Label="Неудачных" Value="@Fmt.N(Net.FailedRequests)" />
+                <Kpi Label="Последний код" Value="@(Net.LastStatusCode == 0 ? "—" : Net.LastStatusCode.ToString())" />
+                <Kpi Label="Cookies" Value="@Cookies.Count.ToString()" />
+            </div>
+            @if (Net.LastUrl is { } url)
+            {
+                <MudText Typo="Typo.caption" Class="itch-muted d-block mt-2" Style="word-break:break-all">Последний запрос @Fmt.Ago(Net.LastRequestAt): @url</MudText>
+            }
+
+            @if (Net.IsPaused && Net.PausedUntil is { } until)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">
+                    itch.io показал проверку Cloudflare (@Net.ConsecutiveChallenges-й раз подряд). Сбор продолжится через @Fmt.Countdown(until).
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="Net.SkipPause">Продолжить сейчас</MudButton>
+                </MudAlert>
+            }
+            else if (Net.IsBlocked)
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-3" Dense="true">
+                    Cloudflare не пропускает запросы после нескольких пауз. Импортируйте свежий cf_clearance и запустите сбор снова.
+                </MudAlert>
+            }
+            else if (Net.LastChallengeAt is { } ch)
+            {
+                <MudText Typo="Typo.caption" Class="itch-muted d-block mt-2">Последняя проверка Cloudflare: @Fmt.Ago(ch)</MudText>
+            }
+
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.subtitle2">Если Cloudflare блокирует сбор</MudText>
+            <MudText Typo="Typo.body2" Class="itch-muted mb-2">
+                Откройте itch.io в браузере, пройдите проверку, затем в DevTools → Application → Cookies → https://itch.io скопируйте значение
+                <code>cf_clearance</code>. Cookie привязан к браузеру (User-Agent в настройках должен совпадать с вашим браузером) и живёт около месяца.
+            </MudText>
+            <div class="d-flex align-center gap-2">
+                <MudTextField T="string" @bind-Value="_cfClearance" Label="cf_clearance" Variant="Variant.Outlined" Margin="Margin.Dense" InputType="InputType.Password" Class="flex-grow-1" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImportCfAsync" Disabled="@string.IsNullOrWhiteSpace(_cfClearance)">Импорт</MudButton>
+                <MudTooltip Text="Удалить все cookies itch.io">
+                    <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep" OnClick="ClearCookiesAsync" />
+                </MudTooltip>
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    @foreach (var profile in new[] { CrawlProfile.QuickStart, CrawlProfile.Daily, CrawlProfile.Deep })
+    {
+        var requests = CrawlPlanner.EstimateRequests(profile, Settings.Current);
+        <MudItem xs="12" md="4">
+            <MudCard Class="itch-card d-flex flex-column">
+                <MudCardHeader>
+                    <CardHeaderAvatar>
+                        <MudIcon Icon="@ProfileIcon(profile)" Color="Color.Primary" />
+                    </CardHeaderAvatar>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">@CrawlProfiles.Name(profile)</MudText>
+                        <MudText Typo="Typo.caption" Class="itch-muted">до ~@Fmt.N(requests) запросов ≈ @Fmt.Duration(EstimateTime(requests))</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent Class="flex-grow-1 pt-0">
+                    <MudText Typo="Typo.body2">@ProfileDescription(profile)</MudText>
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton Variant="@(profile == RecommendedProfile ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.PlayArrow" Disabled="@Crawl.IsBusy" OnClick="@(() => Start(profile))">
+                        Запустить
+                    </MudButton>
+                    @if (profile == RecommendedProfile)
+                    {
+                        <MudText Typo="Typo.caption" Class="ml-3 itch-muted">рекомендуется сейчас</MudText>
+                    }
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+    }
+
+    <MudItem xs="12" lg="7">
+        <MudPaper Class="pa-4 itch-card">
+            <div class="d-flex align-center mb-2">
+                <MudText Typo="Typo.h6">Журнал</MudText>
+                <MudSpacer />
+                <MudSwitch T="bool" @bind-Value="_onlyProblems" Label="Только предупреждения" Color="Color.Warning" />
+            </div>
+            <div class="itch-log">
+                @{
+                    var entries = Crawl.GetLog().Reverse().Where(e => !_onlyProblems || e.Level >= Microsoft.Extensions.Logging.LogLevel.Warning).Take(300).ToList();
+                }
+                @if (entries.Count == 0)
+                {
+                    <div class="itch-muted">Записей пока нет.</div>
+                }
+                @foreach (var e in entries)
+                {
+                    <div class="@LogClass(e.Level)">@Fmt.Local(e.At, "HH:mm:ss") @e.Message</div>
+                }
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" lg="5">
+        <MudPaper Class="pa-4 itch-card">
+            <div class="d-flex align-center mb-2">
+                <MudText Typo="Typo.h6">База данных</MudText>
+                <MudSpacer />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="LoadAsync" />
+            </div>
+            @if (_stats is { } s)
+            {
+                <MudSimpleTable Dense="true" Elevation="0" Class="mud-transparent">
+                    <tbody>
+                        <tr><td>Игр в базе</td><td class="itch-num">@Fmt.N(s.Games) <span class="itch-muted">(18+: @Fmt.N(s.NsfwGames))</span></td></tr>
+                        <tr><td>С оценками</td><td class="itch-num">@Fmt.N(s.RatedGames)</td></tr>
+                        <tr><td>Загружены страницы (теги, даты, движок)</td><td class="itch-num">@Fmt.N(s.GamesWithDetails)</td></tr>
+                        <tr><td>Всего на itch.io (по счётчику)</td><td class="itch-num">@Fmt.N(s.CatalogTotal)</td></tr>
+                        <tr><td>Разработчиков / с профилем</td><td class="itch-num">@Fmt.N(s.Developers) / @Fmt.N(s.DevelopersWithProfile)</td></tr>
+                        <tr><td>Тегов и фильтров</td><td class="itch-num">@Fmt.N(s.Tags)</td></tr>
+                        <tr><td>Джемов / с участниками</td><td class="itch-num">@Fmt.N(s.Jams) / @Fmt.N(s.JamsWithEntries) <span class="itch-muted">(@Fmt.N(s.JamEntries) заявок)</span></td></tr>
+                        <tr><td>Дней истории</td><td class="itch-num">@Fmt.N(s.SnapshotDays) <span class="itch-muted">с @Fmt.Date(s.FirstSnapshotDay)</span></td></tr>
+                        <tr><td>Списков: готово / дробится / в процессе</td><td class="itch-num">@Fmt.N(s.ListsComplete) / @Fmt.N(s.ListsTruncated) / @Fmt.N(s.ListsInProgress)</td></tr>
+                        <tr><td>Размер файла</td><td class="itch-num">@Fmt.N(s.DatabaseBytes / 1048576.0, 1) МБ</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            }
+            else
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12">
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h6">Покрытие каталога по годам</MudText>
+            <MudText Typo="Typo.body2" Class="itch-muted mb-3">
+                Список itch.io отдаёт максимум 200 страниц (7 200 игр). Поэтому глубокий сбор идёт по годам, а если оценённых игр за год больше —
+                дробит год по цене и жанрам. Год считается собранным, когда в топе по оценкам начинаются игры без оценок: все оценённые игры уже получены.
+            </MudText>
+            @if (_stats is { } st)
+            {
+                <MudSimpleTable Dense="true" Hover="true" Elevation="0" FixedHeader="true" Style="max-height:420px">
+                    <thead>
+                        <tr><th>Год</th><th>Игр на itch.io</th><th>Известно</th><th>С оценками</th><th>Статус</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var y in st.Years)
+                        {
+                            <tr>
+                                <td>@y.Year</td>
+                                <td class="itch-num">@Fmt.N(y.TotalResults)</td>
+                                <td class="itch-num">@Fmt.N(y.KnownGames)@(y.TotalResults > 0 ? $" ({Fmt.Pct((double)y.KnownGames / y.TotalResults!.Value)})" : "")</td>
+                                <td class="itch-num">@Fmt.N(y.RatedGames)</td>
+                                <td>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(y.Status == "полностью" ? Color.Success : y.Status == "не начат" ? Color.Default : Color.Info)">@y.Status</MudChip>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+            <div class="d-flex align-center mt-3 gap-2">
+                @if (!_confirmReset)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" StartIcon="@Icons.Material.Filled.RestartAlt" OnClick="@(() => _confirmReset = true)" Disabled="@Crawl.IsBusy">
+                        Начать глубокий сбор заново
+                    </MudButton>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2">Сбросить прогресс всех списков? Собранные игры останутся в базе.</MudText>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning" OnClick="ResetCursorsAsync">Сбросить</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => _confirmReset = false)">Отмена</MudButton>
+                }
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12">
+        <MudPaper Class="pa-2">
+            <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pa-3">
+                <MudTabPanel Text="История запусков">
+                    <MudSimpleTable Dense="true" Hover="true" Elevation="0">
+                        <thead>
+                            <tr><th>Начало</th><th>Профиль</th><th>Статус</th><th>Длительность</th><th>Запросов</th><th>Игр</th><th>Ошибок</th><th>Итог</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in _runs)
+                            {
+                                <tr>
+                                    <td class="itch-num">@Fmt.Local(r.StartedAt)</td>
+                                    <td>@CrawlProfiles.Name(r.Profile)</td>
+                                    <td><MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@RunColor(r.Status)">@RunStatusName(r.Status)</MudChip></td>
+                                    <td class="itch-num">@(r.FinishedAt is { } f ? Fmt.Duration(f - r.StartedAt) : "—")</td>
+                                    <td class="itch-num">@Fmt.N(r.Requests)</td>
+                                    <td class="itch-num">@Fmt.N(r.GamesUpserted)</td>
+                                    <td class="itch-num">@Fmt.N(r.Errors + r.ParseErrors)</td>
+                                    <td class="itch-muted" style="max-width:520px">@r.Message</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                    @if (_runs.Count == 0)
+                    {
+                        <MudText Class="itch-muted pa-2">Запусков ещё не было.</MudText>
+                    }
+                </MudTabPanel>
+                <MudTabPanel Text="Настройки">
+                    <SettingsEditor />
+                </MudTabPanel>
+            </MudTabs>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private DatabaseStats? _stats;
+    private List<CrawlRun> _runs = [];
+    private DateTime? _lastSuccess;
+    private DateTime? _nextDue;
+    private string? _cfClearance;
+    private bool _onlyProblems;
+    private bool _confirmReset;
+    private Timer? _timer;
+    private DateTime _lastStatsLoad = DateTime.MinValue;
+    private bool _wasBusy;
+
+    private string StateLabel => Crawl.State switch
+    {
+        CrawlState.Running => "идёт",
+        CrawlState.Paused => "на паузе",
+        CrawlState.Stopping => "останавливается…",
+        _ => "",
+    };
+
+    private double JobProgress => Crawl.JobCount == 0 ? 0 : 100.0 * Math.Max(0, Crawl.JobIndex - 1) / Crawl.JobCount;
+
+    private CrawlProfile RecommendedProfile => _stats is null || _stats.Games == 0 ? CrawlProfile.QuickStart
+        : _stats.ListsComplete < 10 ? CrawlProfile.Deep : CrawlProfile.Daily;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Crawl.Changed += OnChanged;
+        Net.Changed += OnChanged;
+        Settings.Changed += OnChanged;
+        _timer = new Timer(_ => OnTimer(), null, 1000, 1000);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _stats = await Coverage.LoadAsync();
+        _runs = await Coverage.LoadRunsAsync(40);
+        (_lastSuccess, _nextDue) = await Crawl.GetScheduleAsync();
+        _lastStatsLoad = DateTime.UtcNow;
+    }
+
+    private void OnTimer()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (Crawl.IsBusy && DateTime.UtcNow - _lastStatsLoad > TimeSpan.FromSeconds(15)) await LoadAsync();
+            if (Net.IsPaused || Crawl.IsBusy) StateHasChanged();
+        });
+    }
+
+    private void OnChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (_wasBusy && !Crawl.IsBusy) await LoadAsync();
+            _wasBusy = Crawl.IsBusy;
+            StateHasChanged();
+        });
+    }
+
+    private void Start(CrawlProfile profile)
+    {
+        if (Crawl.TryStart(profile, "вручную"))
+            Snackbar.Add($"Запущено: {CrawlProfiles.Name(profile)}", Severity.Info);
+        else
+            Snackbar.Add("Сбор уже идёт", Severity.Warning);
+        _wasBusy = Crawl.IsBusy;
+    }
+
+    private async Task ImportCfAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_cfClearance)) return;
+        await Settings.SetCfClearanceAsync(_cfClearance);
+        Cookies.ImportCfClearance(_cfClearance);
+        Net.SkipPause();
+        _cfClearance = null;
+        Snackbar.Add("cf_clearance сохранён (зашифрован) и применён", Severity.Success);
+    }
+
+    private async Task ClearCookiesAsync()
+    {
+        Cookies.Clear();
+        await Settings.SetCfClearanceAsync(null);
+        Snackbar.Add("Cookies удалены", Severity.Info);
+    }
+
+    private async Task ResetCursorsAsync()
+    {
+        var n = await Cursors.DeleteAsync("list:");
+        _confirmReset = false;
+        Snackbar.Add($"Сброшено курсоров: {n}", Severity.Info);
+        await LoadAsync();
+    }
+
+    private TimeSpan EstimateTime(int requests)
+    {
+        var s = Settings.Current;
+        var perRequest = (Math.Max(250, s.RequestIntervalMs) + s.RequestJitterMs / 2.0 + 350) / 1000.0;
+        return TimeSpan.FromSeconds(requests * perRequest);
+    }
+
+    private static string ProfileIcon(CrawlProfile p) => p switch
+    {
+        CrawlProfile.QuickStart => Icons.Material.Filled.RocketLaunch,
+        CrawlProfile.Daily => Icons.Material.Filled.Today,
+        _ => Icons.Material.Filled.Storage,
+    };
+
+    private string ProfileDescription(CrawlProfile p)
+    {
+        var s = Settings.Current;
+        return p switch
+        {
+            CrawlProfile.QuickStart =>
+                $"Первые данные за полчаса: каталог тегов, топ по оценкам по всему itch.io, за два последних года, по 18 жанрам и {s.QuickTopTags} крупнейшим тегам; " +
+                $"позиции в popular, новые релизы, featured, {s.QuickDetails} страниц игр, профили и джемы. Статистика приблизительная — смещена к популярным играм, это отмечено меткой покрытия.",
+            CrawlProfile.Daily =>
+                $"Раз в сутки или по кнопке «Обновить»: позиции в popular по {s.DailyPopularTags} тегам, отслеживаемые игры, свежие оценки топов, новые релизы, " +
+                $"{s.DailyDetails} страниц игр, {s.DailyProfiles} профилей, джемы и порция глубокого сбора. Ежедневные снимки дают тренды и «горячее».",
+            _ =>
+                $"Полное покрытие оценённых игр: каждый год каталога, 18 жанров, теги от {s.DeepMinTagProjects} проектов, длительности, движки и 18+. " +
+                $"Упёршиеся в 200 страниц списки дробятся. Суммарно это десятки часов — запускайте несколько раз, прогресс сохраняется. За запуск до {s.DeepListPages} страниц списков.",
+        };
+    }
+
+    private static string RunStatusName(CrawlRunStatus s) => s switch
+    {
+        CrawlRunStatus.Running => "идёт",
+        CrawlRunStatus.Completed => "завершён",
+        CrawlRunStatus.Stopped => "остановлен",
+        CrawlRunStatus.Failed => "ошибка",
+        CrawlRunStatus.Interrupted => "прерван закрытием",
+        _ => s.ToString(),
+    };
+
+    private static Color RunColor(CrawlRunStatus s) => s switch
+    {
+        CrawlRunStatus.Completed => Color.Success,
+        CrawlRunStatus.Failed => Color.Error,
+        CrawlRunStatus.Running => Color.Info,
+        _ => Color.Warning,
+    };
+
+    private static string LogClass(Microsoft.Extensions.Logging.LogLevel level) => level switch
+    {
+        >= Microsoft.Extensions.Logging.LogLevel.Error => "error",
+        Microsoft.Extensions.Logging.LogLevel.Warning => "warn",
+        _ => "",
+    };
+
+    public void Dispose()
+    {
+        Crawl.Changed -= OnChanged;
+        Net.Changed -= OnChanged;
+        Settings.Changed -= OnChanged;
+        _timer?.Dispose();
+    }
+}

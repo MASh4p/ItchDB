@@ -1,0 +1,517 @@
+@page "/mygame"
+@inherits AnalyticsPage
+@inject DataQueries Queries
+@inject SettingsService Settings
+@inject ItchApiClient Api
+@inject CrawlCoordinator Crawl
+@inject ISnackbar Snackbar
+
+<PageTitle>Моя игра — ItchDB</PageTitle>
+
+<MudText Typo="Typo.h4">Моя игра</MudText>
+<MudText Class="itch-muted mb-3">
+    Следите за позициями своих и чужих игр в списках «Популярное» по тегам. С ключом API itch.io приложение узнает реальные просмотры и скачивания ваших игр
+    и уточнит по ним оценку аудитории для всех остальных игр.
+</MudText>
+
+<MudGrid Spacing="3" Class="mb-1">
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-4" Outlined="true" Style="height:100%">
+            <div class="itch-section-title">
+                Ключ API itch.io
+                <FormulaTip Title="Зачем ключ" Formula="просмотров на оценку = просмотры / оценки ваших игр"
+                            Text="itch.io показывает просмотры и скачивания только автору. По вашим играм видно, сколько посетителей приходится на одну оценку, — этим числом приложение пересчитывает аудиторию всех игр." />
+            </div>
+            <MudText Typo="Typo.body2" Class="itch-muted mb-2">
+                Создайте ключ на <MudLink Href="https://itch.io/user/settings/api-keys" Target="_blank">itch.io/user/settings/api-keys</MudLink>.
+                Он хранится только на этом компьютере в зашифрованном виде и используется для одного запроса к api.itch.io.
+            </MudText>
+            <div class="d-flex align-center gap-2">
+                <MudTextField T="string" @bind-Value="_keyInput" Label="@(_hasKey ? "Ключ сохранён — введите новый, чтобы заменить" : "Ключ API")"
+                              InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" />
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="SaveKeyAsync" Disabled="string.IsNullOrWhiteSpace(_keyInput)">Сохранить</MudButton>
+                @if (_hasKey)
+                {
+                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" OnClick="DeleteKeyAsync" title="Удалить ключ" />
+                }
+            </div>
+            <div class="d-flex align-center gap-2 mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadStatsAsync" Disabled="@(!_hasKey || _apiBusy)"
+                           StartIcon="@Icons.Material.Filled.CloudDownload">
+                    @(_apiBusy ? "Загружаю…" : "Загрузить статистику моих игр")
+                </MudButton>
+                @if (_own.Count > 0)
+                {
+                    <MudText Typo="Typo.caption" Class="itch-muted">последний снимок: @Fmt.Date(_own.Max(s => s.Day))</MudText>
+                }
+            </div>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="7">
+        <MudPaper Class="pa-4" Outlined="true" Style="height:100%">
+            <div class="itch-section-title">Калибровка оценки аудитории</div>
+            <MudSimpleTable Dense="true" Elevation="0" Style="background:transparent">
+                <thead><tr><th></th><th style="text-align:right">Сейчас в расчётах</th><th style="text-align:right">По вашим играм</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>Просмотров на одну оценку</td>
+                        <td class="itch-num" style="text-align:right">@Fmt.N(CurrentViewsPerRating, 0) <span class="itch-muted">@(A.Params.CalibratedViewsPerRating is > 0 ? "калибровка" : "по умолчанию")</span></td>
+                        <td class="itch-num" style="text-align:right"><b>@Fmt.N(_calibration?.ViewsPerRating, 0)</b></td>
+                    </tr>
+                    <tr>
+                        <td>Скачиваний на одну оценку</td>
+                        <td class="itch-num" style="text-align:right">@Fmt.N(CurrentDownloadsPerRating, 1) <span class="itch-muted">@(A.Params.CalibratedDownloadsPerRating is > 0 ? "калибровка" : "по умолчанию")</span></td>
+                        <td class="itch-num" style="text-align:right"><b>@Fmt.N(_calibration?.DownloadsPerRating, 1)</b></td>
+                    </tr>
+                </tbody>
+            </MudSimpleTable>
+            <MudText Typo="Typo.caption" Class="itch-muted d-block mt-2">
+                @if (_calibration is { } c)
+                {
+                    <span>Медиана по @Fmt.Count(c.Games, "игре", "играм", "играм") с ≥ @MinCalibrationRatings оценками. Одна игра даёт грубую оценку — чем больше игр, тем точнее.</span>
+                }
+                else
+                {
+                    <span>Для калибровки нужна хотя бы одна ваша игра с ≥ @MinCalibrationRatings оценками, которая уже есть в базе (её страницу собирает проверка отслеживаемых игр).</span>
+                }
+            </MudText>
+            <div class="d-flex gap-2 mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="ApplyCalibrationAsync" Disabled="_calibration is null">Применить калибровку</MudButton>
+                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ResetCalibrationAsync"
+                           Disabled="@(A.Params.CalibratedViewsPerRating is null && A.Params.CalibratedDownloadsPerRating is null)">Сбросить</MudButton>
+            </div>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@if (_ownRows.Count > 0)
+{
+    <MudPaper Class="pa-2 mt-3" Outlined="true">
+        <MudTable T="OwnRow" Items="_ownRows" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Class="itch-table" Elevation="0" SortLabel="Сортировка">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Мои игры</MudText>
+                <MudText Typo="Typo.caption" Class="itch-muted ml-2">данные api.itch.io</MudText>
+                <MudSpacer />
+                <ExportMenu T="OwnRow" Name="my-games" Rows="@(() => _ownRows)" Columns="OwnExportColumns" />
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh><MudTableSortLabel T="OwnRow" SortBy="r => r.Title">Игра</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="OwnRow" SortBy="r => r.Latest.Views" InitialDirection="SortDirection.Descending">Просмотры</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right">За неделю</MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="OwnRow" SortBy="r => r.Latest.Downloads">Скачивания</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right">Скачали</MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="OwnRow" SortBy="r => r.Latest.Purchases">Покупки</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right">Оценок</MudTh>
+                <MudTh Style="text-align:right">Просмотров на оценку</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Игра">
+                    @if (context.Game is { } g)
+                    {
+                        <GameCell Game="g" ShowCover="true" />
+                    }
+                    else
+                    {
+                        <span>@context.Title</span>
+                        <div class="itch-game-sub">страница ещё не собрана</div>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Просмотры" Class="itch-num" Style="text-align:right">@Fmt.N(context.Latest.Views)</MudTd>
+                <MudTd DataLabel="За неделю" Class="itch-num" Style="text-align:right">@Fmt.Signed(context.ViewsWeek)</MudTd>
+                <MudTd DataLabel="Скачивания" Class="itch-num" Style="text-align:right">@Fmt.N(context.Latest.Downloads)</MudTd>
+                <MudTd DataLabel="Скачали" Class="itch-num" Style="text-align:right">@Fmt.Pct(context.Latest.Views > 0 ? (double)context.Latest.Downloads / context.Latest.Views : null, 1)</MudTd>
+                <MudTd DataLabel="Покупки" Class="itch-num" Style="text-align:right">@Fmt.N(context.Latest.Purchases)</MudTd>
+                <MudTd DataLabel="Оценок" Class="itch-num" Style="text-align:right">@(context.Game is { } g2 ? Fmt.N(g2.Ratings) : "—")</MudTd>
+                <MudTd DataLabel="На оценку" Class="itch-num" Style="text-align:right">@Fmt.N(context.ViewsPerRating, 0)</MudTd>
+            </RowTemplate>
+        </MudTable>
+        @if (_ownViews.Count > 0)
+        {
+            <div class="pa-2">
+                <div class="itch-section-title">Просмотры по дням</div>
+                <SeriesChart Series="_ownViews" Height="240" Decimals="0" />
+            </div>
+        }
+    </MudPaper>
+}
+
+<MudPaper Class="pa-4 mt-3" Outlined="true">
+    <div class="d-flex flex-wrap align-center gap-2 mb-2">
+        <div class="itch-section-title mb-0">Отслеживаемые игры</div>
+        <MudSpacer />
+        @if (Crawl.IsBusy)
+        {
+            <MudText Typo="Typo.caption" Class="itch-muted">Идёт сбор: @CrawlProfiles.Name(Crawl.Profile ?? CrawlProfile.Tracking)</MudText>
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="CheckNow" Disabled="@(Crawl.IsBusy || _tracked.Count == 0)"
+                   StartIcon="@Icons.Material.Filled.TravelExplore">Проверить сейчас</MudButton>
+    </div>
+    <MudText Typo="Typo.body2" Class="itch-muted mb-3">
+        Проверка читает страницу игры и ищет её в «Популярном» по каждому её тегу (до N страниц по @ItchCatalog.PageSize игр). Ежедневный сбор делает это сам.
+    </MudText>
+    <MudGrid Spacing="2" Class="mb-2">
+        <MudItem xs="12" md="5">
+            <MudTextField T="string" @bind-Value="_newUrl" Label="Ссылка на игру" Placeholder="https://автор.itch.io/игра" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudTextField T="string" @bind-Value="_newNote" Label="Заметка" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="6" md="1">
+            <MudSelect T="int" @bind-Value="_newPages" Label="Страниц" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                @foreach (var p in new[] { 1, 2, 3, 5, 10 })
+                {
+                    <MudSelectItem T="int" Value="p">@p</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" md="1" Class="d-flex align-center">
+            <MudCheckBox T="bool" @bind-Value="_newOwn" Label="Моя" Dense="true" />
+        </MudItem>
+        <MudItem xs="12" md="2" Class="d-flex align-center">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddTrackedAsync" Disabled="string.IsNullOrWhiteSpace(_newUrl)" FullWidth="true"
+                       StartIcon="@Icons.Material.Filled.Add">Добавить</MudButton>
+        </MudItem>
+    </MudGrid>
+
+    @if (_tracked.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Class="itch-muted">Пока ничего не отслеживается. Добавьте ссылку выше или нажмите «Отслеживать позиции» на странице любой игры.</MudText>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0" Style="background:transparent" Class="itch-table">
+            <thead>
+                <tr><th>Игра</th><th>Лучшие позиции сейчас</th><th style="text-align:right">Списков</th><th>Проверена</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _trackedRows)
+                {
+                    <tr>
+                        <td style="min-width:260px">
+                            @if (row.Game is { } g)
+                            {
+                                <GameCell Game="g" ShowCover="true" />
+                            }
+                            else
+                            {
+                                <MudLink Href="@row.Tracked.Url" Target="_blank">@row.Tracked.Url</MudLink>
+                                <div class="itch-game-sub">ещё не проверена</div>
+                            }
+                            <div class="d-flex gap-1 mt-1">
+                                @if (row.Tracked.IsOwn)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">моя</MudChip>
+                                }
+                                @if (!string.IsNullOrEmpty(row.Tracked.Note))
+                                {
+                                    <span class="itch-muted" style="font-size:.8rem">@row.Tracked.Note</span>
+                                }
+                            </div>
+                        </td>
+                        <td>
+                            @foreach (var p in row.Positions.Take(4))
+                            {
+                                <div style="font-size:.85rem"><b class="itch-num">#@p.Position</b> <span class="itch-muted">@Positions.ListName(D, p.ListKey)</span></div>
+                            }
+                            @if (row.Positions.Count == 0 && row.Game is not null)
+                            {
+                                <span class="itch-muted" style="font-size:.85rem">не найдена в просмотренных страницах</span>
+                            }
+                        </td>
+                        <td class="itch-num" style="text-align:right">@row.Positions.Count</td>
+                        <td class="itch-muted" style="font-size:.85rem">@Fmt.Ago(row.Tracked.LastCheckedAt)<br />до @row.Tracked.MaxPages стр.</td>
+                        <td style="white-space:nowrap">
+                            @if (row.Tracked.GameId is { } gid)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Timeline" Size="Size.Small" OnClick="@(() => ShowHistoryAsync(row.Tracked))" title="Динамика позиций" />
+                            }
+                            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" OnClick="@(() => RemoveAsync(row.Tracked))" title="Перестать отслеживать" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudPaper>
+
+@if (_history is { } h)
+{
+    <MudPaper Class="pa-4 mt-3" Outlined="true">
+        <div class="d-flex align-center mb-2">
+            <div class="itch-section-title mb-0">Динамика позиций: @h.Title</div>
+            <MudSpacer />
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => _history = null)" title="Закрыть" />
+        </div>
+        @if (h.Rows.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="itch-muted">За последние 90 дней игра не попадала в просмотренные страницы списков.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" Style="background:transparent">
+                <thead>
+                    <tr>
+                        <th>Список</th><th style="text-align:right">Сейчас</th><th style="text-align:right">Неделю назад</th><th style="text-align:right">Изменение</th>
+                        <th style="text-align:right">Лучшая</th><th style="text-align:right">Дней в списке</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in h.Rows)
+                    {
+                        var change = r.Now is { } n && r.WeekAgo is { } w ? w - n : (int?)null;
+                        <tr>
+                            <td>@Positions.ListName(D, r.ListKey)</td>
+                            <td class="itch-num" style="text-align:right"><b>@(r.Now is { } now ? $"#{now}" : "—")</b></td>
+                            <td class="itch-num" style="text-align:right">@(r.WeekAgo is { } wa ? $"#{wa}" : "—")</td>
+                            <td class="itch-num" style="text-align:right;color:@(change > 0 ? "#4CC38A" : change < 0 ? "#FF8A8A" : "inherit")">@(change is { } ch ? Fmt.Signed(ch) : "—")</td>
+                            <td class="itch-num" style="text-align:right">#@r.Best <span class="itch-muted">@Fmt.Date(r.BestDay)</span></td>
+                            <td class="itch-num" style="text-align:right">@r.Days</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudText Typo="Typo.caption" Class="itch-muted">Меньше номер — выше в списке. Изменение со знаком «+» — игра поднялась.</MudText>
+        }
+    </MudPaper>
+}
+
+@code {
+    private const int MinCalibrationRatings = 5;
+
+    public sealed record OwnRow(string Title, OwnGameSnapshot Latest, GameRow? Game, int? ViewsWeek, double? ViewsPerRating, double? DownloadsPerRating);
+    private sealed record TrackedRow(TrackedGame Tracked, GameRow? Game, List<ListPosition> Positions);
+    private sealed record Calibration(double ViewsPerRating, double? DownloadsPerRating, int Games);
+    private sealed record HistoryRow(string ListKey, int? Now, int? WeekAgo, int Best, DateOnly BestDay, int Days);
+    private sealed record History(string Title, List<HistoryRow> Rows);
+
+    private bool _hasKey;
+    private string? _keyInput;
+    private bool _apiBusy;
+    private List<OwnGameSnapshot> _own = [];
+    private List<OwnRow> _ownRows = [];
+    private List<ChartSeries> _ownViews = [];
+    private Calibration? _calibration;
+
+    private List<TrackedGame> _tracked = [];
+    private List<TrackedRow> _trackedRows = [];
+    private string? _newUrl;
+    private string? _newNote;
+    private int _newPages = 5;
+    private bool _newOwn = true;
+    private History? _history;
+
+    private double CurrentViewsPerRating => A.Params.CalibratedViewsPerRating is > 0 ? A.Params.CalibratedViewsPerRating.Value : 1 / Math.Max(1e-6, A.Params.RaterShare);
+
+    private double CurrentDownloadsPerRating => A.Params.CalibratedDownloadsPerRating is > 0
+        ? A.Params.CalibratedDownloadsPerRating.Value
+        : CurrentViewsPerRating * A.Params.DownloadShare;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _hasKey = await Settings.GetApiKeyAsync() is not null;
+        _own = await Queries.OwnSnapshotsAsync();
+        _tracked = await Queries.TrackedAsync();
+        Crawl.Changed += OnCrawlChanged;
+        Crawl.RunFinished += OnRunFinished;
+        await base.OnInitializedAsync();
+    }
+
+    protected override void Compute()
+    {
+        _ownRows = _own.GroupBy(s => s.GameId).Select(g =>
+        {
+            var list = g.OrderBy(s => s.Day).ToList();
+            var latest = list[^1];
+            var weekAgo = list.LastOrDefault(s => s.Day <= latest.Day.AddDays(-7));
+            D.GamesById.TryGetValue(g.Key, out var game);
+            var ratings = game is { RatingsKnown: true, Ratings: > 0 } ? game.Ratings : (int?)null;
+            return new OwnRow(game?.Title ?? latest.Title ?? g.Key.ToString(), latest, game,
+                weekAgo is null ? null : latest.Views - weekAgo.Views,
+                ratings is { } r && latest.Views > 0 ? (double)latest.Views / r : null,
+                ratings is { } r2 && latest.Downloads > 0 ? (double)latest.Downloads / r2 : null);
+        }).OrderByDescending(r => r.Latest.Views).ToList();
+
+        var calibrationRows = _ownRows.Where(r => r.Game is { Ratings: >= MinCalibrationRatings } && r.ViewsPerRating is not null).ToList();
+        if (calibrationRows.Count > 0)
+        {
+            var views = Stats.Sorted(calibrationRows.Select(r => r.ViewsPerRating!.Value));
+            var downloads = Stats.Sorted(calibrationRows.Where(r => r.DownloadsPerRating is not null).Select(r => r.DownloadsPerRating!.Value));
+            _calibration = new Calibration(Stats.Median(views), downloads.Length > 0 ? Stats.Median(downloads) : null, calibrationRows.Count);
+        }
+        else
+        {
+            _calibration = null;
+        }
+
+        var days = _own.Select(s => s.Day).Distinct().Order().ToList();
+        _ownViews = days.Count < 2 ? [] : _ownRows.Take(5).Select(r =>
+        {
+            var byDay = _own.Where(s => s.GameId == r.Latest.GameId).ToDictionary(s => s.Day, s => (double)s.Views);
+            var last = 0.0;
+            var points = days.Select(d => new ChartPoint(d.ToString("dd.MM"), last = byDay.GetValueOrDefault(d, last))).ToList();
+            return new ChartSeries(r.Title, points, ChartKind.Line);
+        }).ToList();
+
+        _trackedRows = _tracked.Select(t =>
+        {
+            GameRow? game = t.GameId is { } id ? D.GamesById.GetValueOrDefault(id) : null;
+            var positions = t.GameId is { } gid ? Positions.For(D, gid, neighbors: 0) : [];
+            return new TrackedRow(t, game, positions);
+        }).ToList();
+    }
+
+    private async Task SaveKeyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_keyInput)) return;
+        await Settings.SetApiKeyAsync(_keyInput);
+        _keyInput = null;
+        _hasKey = true;
+        Snackbar.Add("Ключ сохранён (зашифрован)", Severity.Success);
+    }
+
+    private async Task DeleteKeyAsync()
+    {
+        await Settings.SetApiKeyAsync(null);
+        _hasKey = false;
+        Snackbar.Add("Ключ удалён", Severity.Info);
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        var key = await Settings.GetApiKeyAsync();
+        if (key is null)
+        {
+            _hasKey = false;
+            return;
+        }
+        _apiBusy = true;
+        try
+        {
+            var games = await Api.MyGamesAsync(key, CancellationToken.None);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            await Queries.SaveOwnSnapshotsAsync(games.Select(g => new OwnGameSnapshot
+            {
+                GameId = g.Id, Day = today, Title = g.Title, Views = g.Views, Downloads = g.Downloads, Purchases = g.Purchases,
+            }));
+            var added = 0;
+            foreach (var g in games.Where(g => g.Published && !string.IsNullOrEmpty(g.Url)))
+            {
+                var url = DataQueries.NormalizeGameUrl(g.Url!);
+                if (_tracked.Any(t => t.Url == url)) continue;
+                await Queries.AddTrackedAsync(url, isOwn: true, maxPages: 5, note: null);
+                added++;
+            }
+            _own = await Queries.OwnSnapshotsAsync();
+            _tracked = await Queries.TrackedAsync();
+            await RecomputeAsync();
+            Snackbar.Add(games.Count == 0
+                ? "У этого аккаунта нет игр"
+                : $"Загружено игр: {games.Count}{(added > 0 ? $", добавлено в отслеживание: {added}" : "")}", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ItchApiException or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            Snackbar.Add(ex is ItchApiException ? ex.Message : $"Не удалось обратиться к api.itch.io: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _apiBusy = false;
+        }
+    }
+
+    private async Task ApplyCalibrationAsync()
+    {
+        if (_calibration is not { } c) return;
+        var model = Settings.Clone();
+        model.CalibratedViewsPerRating = Math.Round(c.ViewsPerRating, 2);
+        model.CalibratedDownloadsPerRating = c.DownloadsPerRating is { } d ? Math.Round(d, 2) : null;
+        await Settings.SaveAsync(model);
+        Snackbar.Add("Калибровка применена: оценки аудитории пересчитаны", Severity.Success);
+    }
+
+    private async Task ResetCalibrationAsync()
+    {
+        var model = Settings.Clone();
+        model.CalibratedViewsPerRating = null;
+        model.CalibratedDownloadsPerRating = null;
+        await Settings.SaveAsync(model);
+        Snackbar.Add("Калибровка сброшена", Severity.Info);
+    }
+
+    private async Task AddTrackedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newUrl)) return;
+        if (!Uri.TryCreate(DataQueries.NormalizeGameUrl(_newUrl), UriKind.Absolute, out var uri) || !uri.Host.EndsWith("itch.io", StringComparison.OrdinalIgnoreCase)
+            || uri.AbsolutePath.Trim('/').Length == 0)
+        {
+            Snackbar.Add("Нужна ссылка на страницу игры вида https://автор.itch.io/игра", Severity.Warning);
+            return;
+        }
+        await Queries.AddTrackedAsync(_newUrl, _newOwn, _newPages, string.IsNullOrWhiteSpace(_newNote) ? null : _newNote.Trim());
+        _newUrl = _newNote = null;
+        _tracked = await Queries.TrackedAsync();
+        await RecomputeAsync();
+        Snackbar.Add("Игра добавлена. Позиции появятся после «Проверить сейчас» или ежедневного сбора.", Severity.Success);
+    }
+
+    private async Task RemoveAsync(TrackedGame t)
+    {
+        await Queries.RemoveTrackedAsync(t.Id);
+        _tracked = await Queries.TrackedAsync();
+        if (_history is not null && t.GameId is not null) _history = null;
+        await RecomputeAsync();
+    }
+
+    private void CheckNow()
+    {
+        if (Crawl.TryStart(CrawlProfile.Tracking, "вручную"))
+            Snackbar.Add("Проверка отслеживаемых игр запущена — ход виден в шапке и на странице «Сбор данных»", Severity.Info);
+        else
+            Snackbar.Add("Уже идёт другой сбор. Проверка отслеживаемых игр входит в ежедневный сбор.", Severity.Warning);
+    }
+
+    private async Task ShowHistoryAsync(TrackedGame t)
+    {
+        if (t.GameId is not { } id) return;
+        var rows = await Queries.PositionHistoryAsync(id, 90);
+        var lastDay = rows.Count > 0 ? rows.Max(r => r.Day) : default;
+        var history = rows.GroupBy(r => r.ListKey).Select(g =>
+        {
+            var best = g.MinBy(r => r.Position)!;
+            int? now = g.Where(r => r.Day == lastDay).Select(r => (int?)r.Position).FirstOrDefault();
+            int? weekAgo = g.Where(r => r.Day <= lastDay.AddDays(-7)).OrderByDescending(r => r.Day).Select(r => (int?)r.Position).FirstOrDefault();
+            return new HistoryRow(g.Key, now, weekAgo, best.Position, best.Day, g.Select(r => r.Day).Distinct().Count());
+        }).OrderBy(r => r.Now ?? int.MaxValue).ThenBy(r => r.Best).ToList();
+        var title = D.GamesById.TryGetValue(id, out var game) ? game.Title : t.Url;
+        _history = new History(title, history);
+    }
+
+    private static readonly IReadOnlyList<ExportColumn<OwnRow>> OwnExportColumns =
+    [
+        new("Игра", r => r.Title),
+        new("Id", r => r.Latest.GameId),
+        new("Дата снимка", r => r.Latest.Day.ToDateTime(TimeOnly.MinValue)),
+        new("Просмотры", r => r.Latest.Views),
+        new("Просмотров за неделю", r => r.ViewsWeek),
+        new("Скачивания", r => r.Latest.Downloads),
+        new("Покупки", r => r.Latest.Purchases),
+        new("Оценок", r => r.Game?.Ratings),
+        new("Просмотров на оценку", r => r.ViewsPerRating),
+        new("Скачиваний на оценку", r => r.DownloadsPerRating),
+    ];
+
+    private void OnCrawlChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnRunFinished(CrawlProfile profile, CrawlRunStatus status) => InvokeAsync(async () =>
+    {
+        _tracked = await Queries.TrackedAsync();
+        await RecomputeAsync();
+        StateHasChanged();
+    });
+
+    public override void Dispose()
+    {
+        Crawl.Changed -= OnCrawlChanged;
+        Crawl.RunFinished -= OnRunFinished;
+        base.Dispose();
+    }
+}

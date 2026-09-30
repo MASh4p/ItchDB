@@ -1,0 +1,14 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+TestResults/
+publish/
+
+# Local data: database, cookies, logs, data-protection keys
+data/
+*.db
+*.db-shm
+*.db-wal

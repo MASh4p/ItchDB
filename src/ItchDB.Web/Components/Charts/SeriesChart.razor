@@ -1,0 +1,67 @@
+@using ApexCharts
+@* Several series over the same categories (years, months, days); bars and lines can share the chart on two axes. *@
+
+@if (Series.Count == 0 || Series.All(s => s.Points.Count == 0))
+{
+    <MudText Typo="Typo.body2" Class="itch-muted pa-4">Нет данных для графика.</MudText>
+}
+else
+{
+    <ApexChart @key="_key" TItem="ChartPoint" Options="_options" Height="@Height">
+        @foreach (var s in Series)
+        {
+            <ApexPointSeries TItem="ChartPoint" Items="s.Points" Name="@s.Name" SeriesType="@Map(s.Kind)"
+                             XValue="@(p => p.Label)" YValue="@(p => ChartData.Safe(p.Value))" />
+        }
+    </ApexChart>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ChartSeries> Series { get; set; } = [];
+    [Parameter] public object Height { get; set; } = 300;
+    [Parameter] public string? LeftTitle { get; set; }
+    [Parameter] public string? RightTitle { get; set; }
+    [Parameter] public int Decimals { get; set; }
+    [Parameter] public bool Stacked { get; set; }
+
+    private ApexChartOptions<ChartPoint> _options = new();
+    private string _key = "";
+
+    private static SeriesType Map(ChartKind kind) => kind switch
+    {
+        ChartKind.Bar => SeriesType.Bar,
+        ChartKind.Area => SeriesType.Area,
+        _ => SeriesType.Line,
+    };
+
+    protected override void OnParametersSet()
+    {
+        var key = ChartData.Key(Series) + Stacked;
+        if (key == _key) return;
+        _key = key;
+        _options = ChartTheme.Options<ChartPoint>();
+        _options.Chart.Stacked = Stacked;
+        _options.Colors = Series.Select((s, i) => s.Color ?? ChartTheme.Palette[i % ChartTheme.Palette.Length]).ToList();
+        _options.Stroke = new Stroke
+        {
+            Width = Series.Select(s => s.Kind == ChartKind.Bar ? 0 : 3).ToList(),
+            Curve = Curve.Straight,
+        };
+        _options.PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { BorderRadius = 3, ColumnWidth = "60%" } };
+        _options.DataLabels = new ApexCharts.DataLabels { Enabled = false };
+
+        var hasSecond = Series.Any(s => s.SecondAxis);
+        var firstLeft = Series.First(s => !s.SecondAxis).Name;
+        var firstRight = hasSecond ? Series.First(s => s.SecondAxis).Name : null;
+        _options.Yaxis = Series.Select(s => new YAxis
+        {
+            SeriesName = s.SecondAxis ? firstRight : firstLeft,
+            Opposite = s.SecondAxis,
+            Show = s.Name == firstLeft || s.Name == firstRight,
+            DecimalsInFloat = Decimals,
+            ForceNiceScale = true,
+            Title = s.Name == firstLeft && LeftTitle is not null ? new AxisTitle { Text = LeftTitle }
+                : s.Name == firstRight && RightTitle is not null ? new AxisTitle { Text = RightTitle } : null,
+        }).ToList();
+    }
+}

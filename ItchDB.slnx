@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ItchDB.Core/ItchDB.Core.csproj" />
+    <Project Path="src/ItchDB.Infrastructure/ItchDB.Infrastructure.csproj" />
+    <Project Path="src/ItchDB.Web/ItchDB.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ItchDB.Tests/ItchDB.Tests.csproj" />
+  </Folder>
+</Solution>

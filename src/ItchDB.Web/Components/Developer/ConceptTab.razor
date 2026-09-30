@@ -1,0 +1,364 @@
+@inject LiveTotalService Live
+@implements IDisposable
+@* "Проверка идеи": how games like the planned one perform, with the live number of competitors on itch.io. *@
+
+<MudPaper Class="pa-4 mb-3" Outlined="true">
+    <MudText Typo="Typo.body2" Class="itch-muted mb-3">
+        Опишите игру тегами, жанром, платформой и ценой. Сравним с похожими играми из базы и спросим itch.io, сколько игр с такой комбинацией уже есть.
+    </MudText>
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="4">
+            <MudAutocomplete T="string" Value="_pick" ValueChanged="AddTag" Label="Добавить тег" SearchFunc="SearchTags" MaxItems="30"
+                             ToStringFunc="@(s => s is null ? "" : Data.Tag(s) is { } t ? Segments.DisplayName(t) : s)"
+                             ResetValueOnEmptyText="true" CoerceText="false" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                             AdornmentIcon="@Icons.Material.Filled.Add" />
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudSelect T="string" @bind-Value="_genre" Label="Жанр" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                <MudSelectItem T="string" Value="@Any">Любой</MudSelectItem>
+                @foreach (var g in ItchCatalog.Genres.OrderBy(g => g.RussianName))
+                {
+                    <MudSelectItem T="string" Value="@g.Slug">@g.RussianName</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudSelect T="string" @bind-Value="_platform" Label="Платформа" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                <MudSelectItem T="string" Value="@Any">Любая</MudSelectItem>
+                <MudSelectItem T="string" Value="@("download")">Скачиваемая (Win / Mac / Linux)</MudSelectItem>
+                @foreach (var p in ItchCatalog.PlatformFilters)
+                {
+                    <MudSelectItem T="string" Value="@p.Slug">@p.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudSelect T="string" @bind-Value="_price" Label="Цена" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                <MudSelectItem T="string" Value="@Any">Любая</MudSelectItem>
+                <MudSelectItem T="string" Value="@("free")">Бесплатная</MudSelectItem>
+                <MudSelectItem T="string" Value="@("paid")">Платная</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" md="2" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RunAsync" Disabled="_busy" FullWidth="true" StartIcon="@Icons.Material.Filled.PlayArrow">
+                @(_busy ? "Считаю…" : "Проверить")
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+    <div class="d-flex flex-wrap align-center gap-1 mt-2">
+        @foreach (var slug in _tags)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" OnClose="@(() => RemoveTag(slug))">
+                @(Data.Tag(slug) is { } t ? Segments.DisplayName(t) : slug)
+            </MudChip>
+        }
+        @if (_tags.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Class="itch-muted">Теги не выбраны — будет проверен только жанр, платформа и цена.</MudText>
+        }
+        <MudSpacer />
+        <MudCheckBox T="bool" @bind-Value="_useLive" Label="Спросить itch.io о числе конкурентов (1 запрос)" Size="Size.Small" Dense="true" />
+    </div>
+</MudPaper>
+
+@if (_liveBusy)
+{
+    <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined" Dense="true" Class="mb-3">
+        <div class="d-flex align-center gap-2"><MudProgressCircular Size="Size.Small" Indeterminate="true" /> Запрашиваю счётчик на itch.io… (запрос идёт в общей очереди со сбором)</div>
+    </MudAlert>
+}
+
+@if (_result is { } r)
+{
+    <MudGrid Spacing="3" Class="mb-1">
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Class="pa-4 itch-card" Outlined="true">
+                <Kpi Label="Конкурентов на itch.io" Large="true"
+                     Value="@(r.LiveTotal is { } lt ? Fmt.N(lt) : $"≈ {Fmt.N(r.Similar)}")"
+                     Hint="@LiveHint()"
+                     Tip="Счётчик «(N results)» списка itch.io с этими фильтрами — сколько игр уже занимают нишу." />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Class="pa-4 itch-card" Outlined="true">
+                <Kpi Label="Похожих игр в базе" Value="@Fmt.N(r.Similar)" Large="true"
+                     Hint="@($"с ≥ {Filter.MinRatings} оценками: {Fmt.N(r.Qualified)}{(r.Relaxed ? " · совпадение без одного тега" : "")}")" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Class="pa-4 itch-card" Outlined="true">
+                <Kpi Label="Медиана оценок" Value="@Fmt.N(r.Median, 0)" Large="true"
+                     Color="@(r.Median >= r.GlobalMedian * 1.25 ? "#4CC38A" : r.Median <= r.GlobalMedian * 0.8 ? "#F5B84A" : null)"
+                     Hint="@($"по itch.io {Fmt.N(r.GlobalMedian, 0)} · {Fmt.Times(r.GlobalMedian > 0 ? r.Median / r.GlobalMedian : null)}")"
+                     Formula="@Formulas.Median(Filter.MinRatings).Formula" Tip="@Formulas.Median(Filter.MinRatings).Text" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Class="pa-4 itch-card" Outlined="true">
+                <Kpi Label="Лучшие 25% / 10%" Value="@($"{Fmt.N(r.P75, 0)} / {Fmt.N(r.P90, 0)}")" Large="true" Hint="оценок и больше"
+                     Formula="@Formulas.Quantiles.Formula" Tip="@Formulas.Quantiles.Text" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Class="pa-4 itch-card" Outlined="true">
+                <Kpi Label="@($"Шанс {Snapshot.Params.SuccessThreshold}+ оценок")" Large="true" Color="#4CC38A"
+                     Value="@Fmt.Pct(MainProbability(r)?.Share, 1)"
+                     Hint="@(MainProbability(r) is { } mp ? $"по itch.io {Fmt.Pct(mp.GlobalShare, 1)}" : null)"
+                     Formula="@Formulas.Success(Snapshot.Params.SuccessThreshold).Formula" Tip="@Formulas.Success(Snapshot.Params.SuccessThreshold).Text" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Class="pa-4 itch-card" Outlined="true">
+                <Kpi Label="Просмотров у типичной" Large="true" Color="#5CC8FA"
+                     Value="@(r.MedianAudience is { BelowDetection: false } ma ? $"≈ {Fmt.Short(ma.Views)}" : "—")"
+                     Hint="@(r.P90Audience is { BelowDetection: false } pa ? $"у лучших 10%: ≈ {Fmt.Short(pa.Views)}" : null)"
+                     Formula="@Formulas.Audience.Formula" Tip="@Formulas.Audience.Text" />
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4 mb-3" Outlined="true">
+                <div class="itch-section-title">Вывод</div>
+                <InsightList Items="r.Conclusions" ShowLinks="false" />
+            </MudPaper>
+            <MudPaper Class="pa-4 mb-3" Outlined="true">
+                <div class="itch-section-title">
+                    Вероятность набрать N оценок
+                    <FormulaTip Title="Вероятность" Formula="успешных похожих / всех похожих на itch.io (интервал Уилсона 95%)"
+                                Text="@(r.DenominatorEstimated ? "Знаменатель оценён по известным играм — доли завышены. Включите запрос к itch.io для точного знаменателя." : "Знаменатель — живой счётчик itch.io.")" />
+                </div>
+                <MudSimpleTable Dense="true" Elevation="0" Style="background:transparent">
+                    <thead><tr><th>Порог</th><th style="text-align:right">Похожие игры</th><th style="text-align:right">95% интервал</th><th style="text-align:right">Весь itch.io</th><th style="text-align:right">Разница</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in r.Probabilities)
+                        {
+                            var ratio = row.GlobalShare is > 0 ? row.Share / row.GlobalShare.Value : double.NaN;
+                            <tr>
+                                <td>≥ @row.Threshold оценок</td>
+                                <td class="itch-num" style="text-align:right"><b>@Fmt.Pct(row.Share, 1)</b> <span class="itch-muted">(@Fmt.N(row.Successes))</span></td>
+                                <td class="itch-num itch-muted" style="text-align:right">@Fmt.Pct(row.Low, 1)–@Fmt.Pct(row.High, 1)</td>
+                                <td class="itch-num" style="text-align:right">@Fmt.Pct(row.GlobalShare, 1)</td>
+                                <td class="itch-num" style="text-align:right;color:@(ratio >= 1.2 ? "#4CC38A" : ratio <= 0.8 ? "#FF8A8A" : "inherit")">@Fmt.Times(ratio)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+            <MudPaper Class="pa-4 mb-3" Outlined="true">
+                <div class="itch-section-title">Как распределены оценки похожих игр</div>
+                <BarChart Items="_distribution" Name="Игр" Height="220" />
+            </MudPaper>
+            @if (r.Boosters.Count > 0 || r.Draggers.Count > 0)
+            {
+                <MudPaper Class="pa-4" Outlined="true">
+                    <div class="itch-section-title">
+                        Что добавить и чего избегать
+                        <FormulaTip Title="Влияние тега внутри похожих игр" Formula="медиана похожих игр с тегом / медиана похожих игр без него"
+                                    Text="Сравнение только среди похожих игр. Это сопутствие, а не причина." />
+                    </div>
+                    @foreach (var b in r.Boosters)
+                    {
+                        <div class="d-flex align-center py-1 gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Style="color:#4CC38A" />
+                            <MudLink Href="@($"/tags/{Uri.EscapeDataString(b.Tag.Slug)}")" Style="flex:1">@Segments.DisplayName(b.Tag)</MudLink>
+                            <span class="itch-muted" style="font-size:.8rem">@Fmt.N(b.MedianWith, 0) против @Fmt.N(b.MedianWithout, 0) · игр @b.With</span>
+                            <b class="itch-num" style="color:#4CC38A;width:52px;text-align:right">@Fmt.Times(b.Ratio)</b>
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="@(() => AddTag(b.Tag.Slug))" title="Добавить в идею" />
+                        </div>
+                    }
+                    @foreach (var b in r.Draggers)
+                    {
+                        <div class="d-flex align-center py-1 gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Style="color:#FF8A8A" />
+                            <MudLink Href="@($"/tags/{Uri.EscapeDataString(b.Tag.Slug)}")" Style="flex:1">@Segments.DisplayName(b.Tag)</MudLink>
+                            <span class="itch-muted" style="font-size:.8rem">@Fmt.N(b.MedianWith, 0) против @Fmt.N(b.MedianWithout, 0) · игр @b.With</span>
+                            <b class="itch-num" style="color:#FF8A8A;width:52px;text-align:right">@Fmt.Times(b.Ratio)</b>
+                            <span style="width:28px"></span>
+                        </div>
+                    }
+                </MudPaper>
+            }
+        </MudItem>
+        <MudItem xs="12" md="6">
+            @if (r.TagStats.Count > 0)
+            {
+                <MudPaper Class="pa-2 mb-3" Outlined="true">
+                    <SegmentTable Rows="r.TagStats" Params="Snapshot.Params" MinRatings="Filter.MinRatings" Title="Выбранные теги по отдельности" ExportName="concept-tags"
+                                  Compact="true" RowsPerPage="10" DefaultSortByOpportunity="false" />
+                </MudPaper>
+            }
+            <MudPaper Class="pa-2 mb-3" Outlined="true">
+                <GamesTable Games="r.Competitors" Title="Главные конкуренты" ExportName="concept-competitors" RowsPerPage="10" Compact="true" BayesMinVotes="Snapshot.Params.BayesMinVotes" />
+            </MudPaper>
+            <MudPaper Class="pa-2" Outlined="true">
+                <GamesTable Games="r.RecentHits" Title="Свежие похожие игры" Subtitle="вышли за последний год" ExportName="concept-recent" RowsPerPage="10" Compact="true"
+                            ShowWr="false" Empty="За последний год похожих игр в базе нет." BayesMinVotes="Snapshot.Params.BayesMinVotes" />
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private const string Any = "any";
+
+    [Parameter, EditorRequired] public AnalyticsSnapshot Snapshot { get; set; } = AnalyticsSnapshot.Empty;
+    [Parameter, EditorRequired] public AnalyticsFilter Filter { get; set; } = AnalyticsFilter.Default;
+    [Parameter] public string? InitialTags { get; set; }
+    [Parameter] public string? InitialGenre { get; set; }
+    [Parameter] public bool AutoRun { get; set; }
+
+    private AnalyticsDataset Data => Snapshot.Data;
+
+    private readonly CancellationTokenSource _cts = new();
+    private List<string> _tags = [];
+    private string? _pick;
+    private string _genre = Any;
+    private string _platform = Any;
+    private string _price = Any;
+    private bool _useLive = true;
+    private bool _busy;
+    private bool _liveBusy;
+    private ConceptResult? _result;
+    private LiveTotal? _live;
+    private int? _totalFromCrawl;
+    private List<ChartPoint> _distribution = [];
+    private string? _appliedInitial;
+    private AnalyticsSnapshot? _checkedSnapshot;
+    private AnalyticsFilter? _checkedFilter;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var initial = $"{InitialTags}|{InitialGenre}";
+        if (initial != _appliedInitial)
+        {
+            _appliedInitial = initial;
+            if (!string.IsNullOrWhiteSpace(InitialTags))
+                _tags = InitialTags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(s => Data.Tag(s) is not null).Distinct().ToList();
+            if (!string.IsNullOrWhiteSpace(InitialGenre) && ItchCatalog.IsGenreSlug(InitialGenre)) _genre = InitialGenre;
+            if (AutoRun)
+            {
+                await RunAsync();
+                return;
+            }
+        }
+        if (_result is not null && (!ReferenceEquals(_checkedSnapshot, Snapshot) || _checkedFilter != Filter))
+            await CheckAsync(_result.LiveTotal);
+    }
+
+    private Task<IEnumerable<string>> SearchTags(string? text, CancellationToken ct)
+    {
+        var tags = Data.Tags.Values.Where(t => t.Kind != TagKind.Language && !_tags.Contains(t.Slug) && Data.Members(t.Id).Count >= 5
+                                               && (Filter.ShowNsfw || !ItchCatalog.NsfwTags.Contains(t.Slug)));
+        if (!string.IsNullOrWhiteSpace(text))
+            tags = tags.Where(t => t.Name.Contains(text, StringComparison.OrdinalIgnoreCase) || t.Slug.Contains(text, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(tags.OrderByDescending(t => Data.Members(t.Id).Count).Take(30).Select(t => t.Slug));
+    }
+
+    private void AddTag(string? slug)
+    {
+        if (!string.IsNullOrEmpty(slug) && !_tags.Contains(slug)) _tags.Add(slug);
+        _pick = null;
+    }
+
+    private void RemoveTag(string slug) => _tags.Remove(slug);
+
+    private ConceptQuery BuildQuery()
+    {
+        var ids = _tags.Select(s => Data.Tag(s)?.Id).OfType<int>().ToList();
+        var platforms = _platform switch
+        {
+            Any => Platforms.None,
+            "download" => Platforms.Windows | Platforms.MacOS | Platforms.Linux,
+            _ => ItchCatalog.PlatformFilters.FirstOrDefault(p => p.Slug == _platform).Flag,
+        };
+        PriceModel? price = _price switch
+        {
+            "free" => PriceModel.Free,
+            "paid" => PriceModel.Paid,
+            _ => null,
+        };
+        return new ConceptQuery(ids, _genre == Any ? null : _genre, platforms, price);
+    }
+
+    private async Task RunAsync()
+    {
+        if (Snapshot.IsEmpty) return;
+        _busy = true;
+        int? liveTotal = null;
+        var filters = BuildQuery().FilterSlugs(Data);
+        _totalFromCrawl = null;
+        if (filters.Count > 0 && Data.Total(LiveTotalService.FilterKey(filters)) is { } crawled)
+        {
+            _live = null;
+            _totalFromCrawl = liveTotal = crawled;
+        }
+        else if (_useLive && filters.Count > 0)
+        {
+            _live = Live.Cached(filters);
+            if (_live is null)
+            {
+                _liveBusy = true;
+                StateHasChanged();
+                try
+                {
+                    _live = await Live.GetAsync(filters, _cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                finally
+                {
+                    _liveBusy = false;
+                }
+            }
+            liveTotal = _live.Total;
+        }
+        else
+        {
+            _live = null;
+        }
+        await CheckAsync(liveTotal);
+    }
+
+    private async Task CheckAsync(int? liveTotal)
+    {
+        _busy = true;
+        var snapshot = Snapshot;
+        var filter = Filter;
+        var query = BuildQuery();
+        var result = await Task.Run(() => ConceptChecker.Check(snapshot.Data, filter, snapshot.Params, query, snapshot.Now, liveTotal, key => snapshot.Segment(filter, key)));
+        _result = result;
+        _checkedSnapshot = snapshot;
+        _checkedFilter = filter;
+        _distribution = Distribution(result.QualifiedRatings, filter.MinRatings);
+        _busy = false;
+    }
+
+    private static List<ChartPoint> Distribution(double[] ratings, int min)
+    {
+        (string Label, double From, double To)[] bins =
+            [($"{min}–9", min, 9), ("10–24", 10, 24), ("25–49", 25, 49), ("50–99", 50, 99), ("100–249", 100, 249), ("250–999", 250, 999), ("1000+", 1000, double.MaxValue)];
+        return bins.Where(b => b.To >= min).Select(b => new ChartPoint(b.Label, ratings.Count(r => r >= b.From && r <= b.To))).ToList();
+    }
+
+    private ProbabilityRow? MainProbability(ConceptResult r) => r.Probabilities.FirstOrDefault(p => p.Threshold == Snapshot.Params.SuccessThreshold);
+
+    private string LiveHint() => _live switch
+    {
+        null when _totalFromCrawl is not null => "счётчик itch.io из последнего сбора",
+        null => _useLive ? "фильтры не выбраны — это весь itch.io" : "запрос к itch.io выключен",
+        { Unsupported: true } => "itch.io не поддерживает такую комбинацию фильтров",
+        { Error: { } e } => $"itch.io не ответил: {e}",
+        { Total: not null } l => $"живой счётчик, {Fmt.Ago(l.At)}",
+        _ => "",
+    };
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

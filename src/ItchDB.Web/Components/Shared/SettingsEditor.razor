@@ -1,0 +1,135 @@
+@inject SettingsService Settings
+@inject ISnackbar Snackbar
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="6" lg="4">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">Сеть</MudText>
+        <MudNumericField T="int" @bind-Value="_m.RequestIntervalMs" Label="Интервал между запросами, мс" Min="250" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="Меньше 1000 мс повышает риск проверки Cloudflare" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_m.RequestJitterMs" Label="Случайная добавка, мс" Min="0" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudTextField T="string" @bind-Value="_pauses" Label="Паузы при Cloudflare, мин (через запятую)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      HelperText="После последней паузы сбор останавливается" Class="mb-3" />
+        <MudTextField T="string" @bind-Value="_m.UserAgent" Label="User-Agent" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2"
+                      HelperText="Должен совпадать с браузером, из которого взят cf_clearance" />
+    </MudItem>
+
+    <MudItem xs="12" md="6" lg="4">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">Расписание</MudText>
+        <MudSwitch T="bool" @bind-Value="_m.AutoDailyEnabled" Color="Color.Primary" Label="Автоматическое ежедневное обновление, пока приложение открыто" Class="mb-2" />
+        <MudNumericField T="int" @bind-Value="_m.DailyIntervalHours" Label="Интервал, часов" Min="1" Max="168" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
+
+        <MudText Typo="Typo.subtitle1" Class="mb-2">Аналитика</MudText>
+        <MudNumericField T="int" @bind-Value="_m.SuccessThreshold" Label="«Успех» — оценок не меньше" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="Порог для вероятности успеха P(≥X) и доли успешных" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_m.MinSegmentSample" Label="Минимальная выборка сегмента" Min="3" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="Сегменты с меньшим числом игр не участвуют в рейтингах" Class="mb-3" />
+        <MudNumericField T="double" @bind-Value="_m.ShrinkK" Label="Сглаживание медианы k" Min="0" Step="5" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="adj = (n·медиана сегмента + k·общая медиана) / (n + k)" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_m.BayesMinVotes" Label="Взвешенный рейтинг: m" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="WR = v/(v+m)·R + m/(v+m)·C" />
+    </MudItem>
+
+    <MudItem xs="12" md="6" lg="4">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">Opportunity score — веса</MudText>
+        <MudNumericField T="double" @bind-Value="_m.WeightDemand" Label="Спрос" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudNumericField T="double" @bind-Value="_m.WeightSuccess" Label="Шанс успеха" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudNumericField T="double" @bind-Value="_m.WeightCompetition" Label="Низкая конкуренция" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudNumericField T="double" @bind-Value="_m.WeightTrend" Label="Тренд" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
+
+        <MudText Typo="Typo.subtitle1" Class="mb-2">Горячее</MudText>
+        <MudText Typo="Typo.caption" Class="itch-muted d-block mb-2">Hot = (Δоценок за 7 дн + a·Δкомментариев + b·рост позиции) / (возраст в днях + 2)^g</MudText>
+        <div class="d-flex gap-2">
+            <MudNumericField T="double" @bind-Value="_m.HotA" Label="a" Min="0" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudNumericField T="double" @bind-Value="_m.HotB" Label="b" Min="0" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudNumericField T="double" @bind-Value="_m.HotG" Label="g" Min="0" Max="2" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </div>
+    </MudItem>
+
+    <MudItem xs="12" md="6" lg="4">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">Оценка аудитории</MudText>
+        <MudText Typo="Typo.caption" Class="itch-muted d-block mb-2">
+            Просмотры ≈ оценки / доля оценивающих. Без API-ключа используются отраслевые допущения; с ключом («Моя игра») — ваши реальные соотношения.
+        </MudText>
+        <MudNumericField T="double" @bind-Value="_m.RaterShare" Label="Доля оценивающих от просмотров" Min="0.0001" Max="1" Step="0.001" Format="0.####" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <div class="d-flex gap-2 mb-3">
+            <MudNumericField T="double" @bind-Value="_m.RaterShareLow" Label="Нижняя" Min="0.0001" Max="1" Step="0.001" Format="0.####" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudNumericField T="double" @bind-Value="_m.RaterShareHigh" Label="Верхняя" Min="0.0001" Max="1" Step="0.001" Format="0.####" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </div>
+        <MudNumericField T="double" @bind-Value="_m.WebPlayShare" Label="Доля запусков в браузере от просмотров" Min="0" Max="1" Step="0.01" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudNumericField T="double" @bind-Value="_m.DownloadShare" Label="Доля скачиваний от просмотров" Min="0" Max="1" Step="0.01" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    </MudItem>
+
+    <MudItem xs="12" lg="8">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">Объём сбора</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.QuickTopTags" Label="Быстрый: тегов" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.QuickPagesPerList" Label="Быстрый: стр. на тег" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.QuickDetails" Label="Быстрый: страниц игр" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.JamEntriesPerRun" Label="Джемов с участниками за запуск" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyPopularTags" Label="Ежедн.: тегов popular" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyPopularPages" Label="Ежедн.: стр. popular" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyTopRatedPages" Label="Ежедн.: стр. top-rated на тег" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyNewestMaxPages" Label="Ежедн.: стр. новинок" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyDetails" Label="Ежедн.: страниц игр" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyProfiles" Label="Ежедн.: профилей" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyBacklogPages" Label="Ежедн.: страниц глубокого сбора" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepListPages" Label="Глубокий: страниц списков" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepMinTagProjects" Label="Глубокий: тег от N проектов" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepRefreshDays" Label="Перепроверять списки через, дней" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepDetails" Label="Глубокий: страниц игр" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepProfiles" Label="Глубокий: профилей" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        </MudGrid>
+    </MudItem>
+
+    <MudItem xs="12" Class="d-flex gap-2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">Сохранить</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="Revert">Отменить изменения</MudButton>
+        <MudSpacer />
+        <MudButton Variant="Variant.Text" Color="Color.Warning" OnClick="ResetDefaults">Значения по умолчанию</MudButton>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private AppSettingsModel _m = new();
+    private string _pauses = "";
+
+    protected override void OnInitialized() => Revert();
+
+    private void Revert()
+    {
+        _m = Settings.Clone();
+        _pauses = string.Join(", ", _m.CloudflarePauseMinutes);
+    }
+
+    private void ResetDefaults()
+    {
+        var keep = _m;
+        _m = new AppSettingsModel
+        {
+            DefaultMinRatings = keep.DefaultMinRatings,
+            DefaultShowNsfw = keep.DefaultShowNsfw,
+            CalibratedViewsPerRating = keep.CalibratedViewsPerRating,
+            CalibratedDownloadsPerRating = keep.CalibratedDownloadsPerRating,
+        };
+        _pauses = string.Join(", ", _m.CloudflarePauseMinutes);
+    }
+
+    private async Task SaveAsync()
+    {
+        var pauses = _pauses.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => int.TryParse(p, out var v) ? v : 0).Where(v => v > 0).ToArray();
+        _m.CloudflarePauseMinutes = pauses.Length > 0 ? pauses : [10, 20, 40];
+        var weights = _m.WeightDemand + _m.WeightSuccess + _m.WeightCompetition + _m.WeightTrend;
+        if (weights <= 0)
+        {
+            Snackbar.Add("Сумма весов Opportunity должна быть больше нуля", Severity.Error);
+            return;
+        }
+        var current = Settings.Current;
+        _m.DefaultMinRatings = current.DefaultMinRatings;
+        _m.DefaultShowNsfw = current.DefaultShowNsfw;
+        await Settings.SaveAsync(_m);
+        Revert();
+        Snackbar.Add("Настройки сохранены", Severity.Success);
+    }
+}

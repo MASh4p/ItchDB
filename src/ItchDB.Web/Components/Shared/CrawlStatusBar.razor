@@ -1,0 +1,141 @@
+@implements IDisposable
+@inject CrawlCoordinator Crawl
+@inject NetworkStatus Net
+@inject CoverageReport Coverage
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<div class="d-flex align-center gap-1 mr-3">
+    @if (Net.IsPaused && Net.PausedUntil is { } until)
+    {
+        <MudTooltip Text="itch.io показал проверку Cloudflare. Сбор ждёт и продолжит сам. Ускорить можно, импортировав cookie cf_clearance на странице «Сбор данных».">
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.HourglassTop" OnClick="GoData">
+                Cloudflare: пауза @Fmt.Countdown(until)
+            </MudChip>
+        </MudTooltip>
+    }
+    else if (Net.IsBlocked)
+    {
+        <MudTooltip Text="Cloudflare не пропускает запросы. Откройте «Сбор данных» и импортируйте cf_clearance.">
+            <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Block" OnClick="GoData">Доступ ограничен</MudChip>
+        </MudTooltip>
+    }
+
+    @if (Crawl.IsBusy)
+    {
+        <MudTooltip>
+            <TooltipContent>
+                <div style="max-width:360px">
+                    <b>@(Crawl.Profile is { } p ? CrawlProfiles.Name(p) : "Сбор")</b><br />
+                    Задача @Crawl.JobIndex из @Crawl.JobCount: @Crawl.CurrentJob<br />
+                    @if (Crawl.StepText is { } step)
+                    {
+                        <span class="itch-muted">@step</span><br />
+                    }
+                    Запросов: @Fmt.N(Crawl.Requests), игр обновлено: @Fmt.N(Crawl.GamesUpserted)
+                </div>
+            </TooltipContent>
+            <ChildContent>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(Crawl.State == CrawlState.Paused ? Color.Warning : Color.Info)" OnClick="GoData">
+                    @if (Crawl.State == CrawlState.Running)
+                    {
+                        <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" Style="width:14px;height:14px" />
+                    }
+                    @StateLabel · @Fmt.N(Crawl.Requests) запр.
+                </MudChip>
+            </ChildContent>
+        </MudTooltip>
+        @if (Crawl.State == CrawlState.Running)
+        {
+            <MudTooltip Text="Пауза">
+                <MudIconButton Icon="@Icons.Material.Filled.Pause" Size="Size.Small" OnClick="Crawl.Pause" />
+            </MudTooltip>
+        }
+        else if (Crawl.State == CrawlState.Paused)
+        {
+            <MudTooltip Text="Продолжить">
+                <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" OnClick="Crawl.Resume" />
+            </MudTooltip>
+        }
+        @if (Crawl.State != CrawlState.Stopping)
+        {
+            <MudTooltip Text="Остановить (прогресс сохранится)">
+                <MudIconButton Icon="@Icons.Material.Filled.Stop" Size="Size.Small" OnClick="Crawl.Stop" />
+            </MudTooltip>
+        }
+    }
+    else
+    {
+        <MudTooltip Text="@_idleTip">
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="StartUpdateAsync">
+                Обновить
+            </MudButton>
+        </MudTooltip>
+    }
+</div>
+
+@code {
+    private Timer? _timer;
+    private string _idleTip = "Запустить обновление данных";
+
+    private string StateLabel => Crawl.State switch
+    {
+        CrawlState.Paused => "Пауза",
+        CrawlState.Stopping => "Остановка…",
+        _ => "Сбор",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Crawl.Changed += OnChanged;
+        Net.Changed += OnChanged;
+        _timer = new Timer(_ => { if (Net.IsPaused) OnChanged(); }, null, 1000, 1000);
+        await RefreshTipAsync();
+    }
+
+    private async Task RefreshTipAsync()
+    {
+        try
+        {
+            var (last, next) = await Crawl.GetScheduleAsync();
+            _idleTip = last is null
+                ? "Данных ещё нет — запустится «Быстрый старт»"
+                : $"Ежедневное обновление. Последнее успешное: {Fmt.Ago(last)}" + (next is { } n ? $", следующее автоматически: {Fmt.Local(n)}" : "");
+        }
+        catch (Exception)
+        {
+            _idleTip = "Запустить обновление данных";
+        }
+    }
+
+    private async Task StartUpdateAsync()
+    {
+        var stats = await Coverage.LoadAsync();
+        var profile = stats.Games == 0 ? CrawlProfile.QuickStart : CrawlProfile.Daily;
+        if (Crawl.TryStart(profile, "кнопка «Обновить»"))
+            Snackbar.Add($"Запущено: {CrawlProfiles.Name(profile)}. Ход сбора — на странице «Сбор данных».", Severity.Info);
+        else
+            Snackbar.Add("Сбор уже идёт", Severity.Warning);
+    }
+
+    private void GoData() => Nav.NavigateTo("/data");
+
+    private bool _wasBusy;
+
+    private void OnChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (_wasBusy && !Crawl.IsBusy) await RefreshTipAsync();
+            _wasBusy = Crawl.IsBusy;
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        Crawl.Changed -= OnChanged;
+        Net.Changed -= OnChanged;
+        _timer?.Dispose();
+    }
+}

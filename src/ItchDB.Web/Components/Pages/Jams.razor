@@ -1,0 +1,212 @@
+@page "/jams"
+@inherits AnalyticsPage
+@inject DataQueries Queries
+
+<PageTitle>Джемы — ItchDB</PageTitle>
+
+<MudText Typo="Typo.h4">Джемы</MudText>
+<MudText Class="itch-muted mb-3">
+    Джемы — быстрый способ получить первых игроков и оценки. Здесь видно, какие джемы крупные, сколько участников доходит до сдачи и как игры с джемов живут потом.
+</MudText>
+
+<DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
+    @if (_vm is { } vm)
+    {
+        @if (vm.Rows.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+                Джемов в базе пока нет. Их собирает ежедневный сбор (список джемов и участники нескольких крупных джемов за раз).
+            </MudAlert>
+        }
+        <MudGrid Spacing="3" Class="mb-1">
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Джемов в базе" Value="@Fmt.N(vm.Rows.Count)" Large="true" Hint="@($"с участниками: {Fmt.N(vm.WithEntries)}")" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Идут сейчас" Value="@Fmt.N(vm.Active)" Large="true" Hint="@($"скоро начнутся: {Fmt.N(vm.Upcoming)}")" Color="#4CC38A" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Медиана работ" Value="@Fmt.N(vm.MedianSubmissions, 0)" Large="true" Hint="на джем" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Доходят до сдачи" Value="@Fmt.Pct(vm.MedianConversion)" Large="true" Hint="медиана: работ / записавшихся"
+                         Tip="Сколько записавшихся участников в итоге сдают игру. Большинство записавшихся не доходят до конца." />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="Игр с джемов" Value="@Fmt.N(vm.JamGames)" Large="true" Hint="@($"медиана оценок {Fmt.N(vm.JamMedian, 0)} против {Fmt.N(vm.OtherMedian, 0)}")"
+                         Tip="Игры, сделанные на джем, из общей базы: сравнение медианы оценок на itch.io с остальными играми." />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudPaper Class="pa-4 itch-card" Outlined="true">
+                    <Kpi Label="@($"Шанс {A.Params.SuccessThreshold}+ у игр с джемов")" Value="@Fmt.Pct(vm.JamSuccess, 1)" Large="true"
+                         Hint="@($"у остальных {Fmt.Pct(vm.OtherSuccess, 1)} · среди известных игр")" />
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudTable T="JamRow" Items="vm.Rows" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" SortLabel="Сортировка"
+                  Class="itch-table mt-3" Elevation="0" Filter="Matches">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Список джемов</MudText>
+                <MudSpacer />
+                <MudChipSet T="string" @bind-SelectedValue="_state" SelectionMode="SelectionMode.SingleSelection" CheckMark="false" Size="Size.Small"
+                            SelectedColor="Color.Primary" Variant="Variant.Outlined" Class="mr-2">
+                    <MudChip T="string" Value="@("all")" Text="Все" />
+                    <MudChip T="string" Value="@("active")" Text="Идут" />
+                    <MudChip T="string" Value="@("upcoming")" Text="Скоро" />
+                    <MudChip T="string" Value="@("ended")" Text="Прошли" />
+                </MudChipSet>
+                <MudTextField T="string" @bind-Value="_search" Placeholder="Поиск" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true" DebounceInterval="300" Variant="Variant.Outlined" Margin="Margin.Dense" Class="itch-search mr-2" />
+                <ExportMenu T="JamRow" Name="jams" Rows="@(() => vm.Rows.Where(Matches))" Columns="ExportColumns" />
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.Title">Джем</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.StartAt ?? DateTime.MinValue">Начало</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.EndAt ?? DateTime.MinValue" InitialDirection="SortDirection.Descending">Сдача до</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.Joined ?? -1">Записались</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.Submissions ?? -1">Работ</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Conversion ?? -1">Сдали</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Entries">В базе</MudTableSortLabel></MudTh>
+                <MudTh>Статус</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Джем">
+                    <MudLink Href="@($"/jams/{context.Jam.Id}")">@context.Jam.Title</MudLink>
+                    @if (context.Jam.IsFeatured)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text" Class="ml-1">featured</MudChip>
+                    }
+                    @if (!string.IsNullOrEmpty(context.Jam.Hosts))
+                    {
+                        <div class="itch-game-sub">@context.Jam.Hosts</div>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Начало" Class="itch-num">@Fmt.Date(context.Jam.StartAt)</MudTd>
+                <MudTd DataLabel="Сдача до" Class="itch-num">@Fmt.Date(context.Jam.EndAt)</MudTd>
+                <MudTd DataLabel="Записались" Class="itch-num" Style="text-align:right">@Fmt.N(context.Jam.Joined)</MudTd>
+                <MudTd DataLabel="Работ" Class="itch-num" Style="text-align:right">@Fmt.N(context.Jam.Submissions)</MudTd>
+                <MudTd DataLabel="Сдали" Class="itch-num" Style="text-align:right">@Fmt.Pct(context.Conversion)</MudTd>
+                <MudTd DataLabel="В базе" Class="itch-num" Style="text-align:right">@(context.Entries > 0 ? Fmt.N(context.Entries) : "—")</MudTd>
+                <MudTd DataLabel="Статус">
+                    <span style="color:@StateColor(context.State)">@StateName(context.State)</span>
+                    @if (context.Jam.IsRanked)
+                    {
+                        <span class="itch-muted"> · с оценками</span>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Строк:" InfoFormat="{first_item}–{last_item} из {all_items}" PageSizeOptions="new[] { 25, 50, 100, 250 }" />
+            </PagerContent>
+        </MudTable>
+    }
+</DataGate>
+
+@code {
+    public enum JamState { Upcoming, Active, Voting, Ended, Unknown }
+
+    public sealed record JamRow(Jam Jam, int Entries, double? Conversion, JamState State);
+    private sealed record Vm(List<JamRow> Rows, int WithEntries, int Active, int Upcoming, double MedianSubmissions, double MedianConversion,
+        int JamGames, double JamMedian, double OtherMedian, double JamSuccess, double OtherSuccess);
+
+    private Vm? _vm;
+    private List<Jam> _jams = [];
+    private Dictionary<int, int> _counts = [];
+    private string _state = "all";
+    private string? _search;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _jams = await Queries.JamsAsync();
+        _counts = await Queries.JamEntryCountsAsync();
+        await base.OnInitializedAsync();
+    }
+
+    private bool Matches(JamRow r) =>
+        _state switch
+        {
+            "active" => r.State is JamState.Active or JamState.Voting,
+            "upcoming" => r.State == JamState.Upcoming,
+            "ended" => r.State == JamState.Ended,
+            _ => true,
+        }
+        && (string.IsNullOrWhiteSpace(_search) || r.Jam.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || (r.Jam.Hosts?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    public static JamState StateOf(Jam j, DateTime now) => j switch
+    {
+        { StartAt: { } s } when s > now => JamState.Upcoming,
+        { EndAt: { } e } when e > now => JamState.Active,
+        { VotingEndAt: { } v } when v > now => JamState.Voting,
+        { EndAt: not null } => JamState.Ended,
+        _ => JamState.Unknown,
+    };
+
+    public static string StateName(JamState s) => s switch
+    {
+        JamState.Upcoming => "скоро",
+        JamState.Active => "идёт",
+        JamState.Voting => "голосование",
+        JamState.Ended => "завершён",
+        _ => "—",
+    };
+
+    public static string StateColor(JamState s) => s switch
+    {
+        JamState.Upcoming => "#5CC8FA",
+        JamState.Active => "#4CC38A",
+        JamState.Voting => "#F5B84A",
+        _ => "inherit",
+    };
+
+    protected override void Compute()
+    {
+        var now = DateTime.UtcNow;
+        var rows = _jams.Select(j => new JamRow(j, _counts.GetValueOrDefault(j.Id),
+            j is { Joined: > 0, Submissions: { } s } ? Math.Min(1, (double)s / j.Joined.Value) : null, StateOf(j, now))).ToList();
+
+        var submissions = Stats.Sorted(rows.Where(r => r.Jam.Submissions is > 0).Select(r => (double)r.Jam.Submissions!.Value));
+        var conversions = Stats.Sorted(rows.Where(r => r.Conversion is not null).Select(r => r.Conversion!.Value));
+
+        var games = A.Games(F).ToList();
+        var jamGames = games.Where(g => g.IsJamEntry).ToList();
+        var other = games.Where(g => !g.IsJamEntry).ToList();
+        var jamRated = Stats.QualifiedRatings(jamGames, F.MinRatings);
+        var otherRated = Stats.QualifiedRatings(other, F.MinRatings);
+        double Share(List<GameRow> list) => list.Count > 0 ? (double)list.Count(g => g.Ratings >= A.Params.SuccessThreshold) / list.Count : double.NaN;
+
+        _vm = new Vm(rows, rows.Count(r => r.Entries > 0), rows.Count(r => r.State is JamState.Active or JamState.Voting), rows.Count(r => r.State == JamState.Upcoming),
+            submissions.Length > 0 ? Stats.Median(submissions) : double.NaN, conversions.Length > 0 ? Stats.Median(conversions) : double.NaN,
+            jamGames.Count, jamRated.Length > 0 ? Stats.Median(jamRated) : double.NaN, otherRated.Length > 0 ? Stats.Median(otherRated) : double.NaN,
+            Share(jamGames), Share(other));
+    }
+
+    private static readonly IReadOnlyList<ExportColumn<JamRow>> ExportColumns =
+    [
+        new("Джем", r => r.Jam.Title),
+        new("Организаторы", r => r.Jam.Hosts),
+        new("Ссылка", r => $"{ItchCatalog.BaseUrl}/jam/{r.Jam.Slug}"),
+        new("Начало", r => r.Jam.StartAt),
+        new("Сдача до", r => r.Jam.EndAt),
+        new("Голосование до", r => r.Jam.VotingEndAt),
+        new("Записались", r => r.Jam.Joined),
+        new("Работ", r => r.Jam.Submissions),
+        new("Доля сдавших", r => r.Conversion),
+        new("Оценок в джеме", r => r.Jam.RatingsCount),
+        new("Работ в базе", r => r.Entries),
+        new("С оценками", r => r.Jam.IsRanked),
+        new("Featured", r => r.Jam.IsFeatured),
+        new("Статус", r => StateName(r.State)),
+    ];
+}

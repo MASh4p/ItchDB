@@ -1,0 +1,39 @@
+@* Cover, title and author of a game, linking to its card. *@
+<div class="d-flex align-center gap-3" style="min-width: 0;">
+    @if (ShowCover)
+    {
+        @if (!string.IsNullOrEmpty(Game.CoverUrl))
+        {
+            <img src="@Game.CoverUrl" class="itch-thumb" loading="lazy" alt="" />
+        }
+        else
+        {
+            <div class="itch-thumb"></div>
+        }
+    }
+    <div style="min-width: 0;">
+        <MudLink Href="@($"/games/{Game.Id}")" Class="itch-game-title">@Game.Title</MudLink>
+        <div class="itch-muted itch-game-sub">
+            @if (!string.IsNullOrEmpty(Game.AuthorName))
+            {
+                @if (Game.DeveloperId is { } dev)
+                {
+                    <a href="@($"/developers/{dev}")" class="itch-muted">@Game.AuthorName</a>
+                }
+                else
+                {
+                    @Game.AuthorName
+                }
+            }
+            @if (Game.IsNsfw)
+            {
+                <span class="itch-nsfw ml-1">18+</span>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public GameRow Game { get; set; } = default!;
+    [Parameter] public bool ShowCover { get; set; } = true;
+}

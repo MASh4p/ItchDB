@@ -1,0 +1,194 @@
+@page "/jams/{Id:int}"
+@inherits AnalyticsPage
+@inject DataQueries Queries
+
+<PageTitle>@(_jam?.Title ?? "Джем") — ItchDB</PageTitle>
+
+@if (_loaded && _jam is null)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Джем не найден в базе.</MudAlert>
+}
+else if (_jam is { } jam)
+{
+    <div class="d-flex flex-wrap align-center gap-3 mb-1">
+        <MudText Typo="Typo.h4">@jam.Title</MudText>
+        <span style="color:@Jams.StateColor(Jams.StateOf(jam, DateTime.UtcNow))">@Jams.StateName(Jams.StateOf(jam, DateTime.UtcNow))</span>
+        <MudSpacer />
+        <MudButton Href="@($"{ItchCatalog.BaseUrl}/jam/{jam.Slug}")" Target="_blank" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                   EndIcon="@Icons.Material.Filled.OpenInNew">Страница джема</MudButton>
+    </div>
+    <MudText Class="itch-muted mb-3">
+        @if (!string.IsNullOrEmpty(jam.Hosts))
+        {
+            <span>Организаторы: @jam.Hosts. </span>
+        }
+        @Fmt.Date(jam.StartAt) — @Fmt.Date(jam.EndAt)@(jam.VotingEndAt is { } v ? $", голосование до {Fmt.Date(v)}" : "").
+    </MudText>
+
+    <DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
+        @if (_vm is { } vm)
+        {
+            <MudGrid Spacing="3" Class="mb-1">
+                <MudItem xs="6" md="2">
+                    <MudPaper Class="pa-4 itch-card" Outlined="true">
+                        <Kpi Label="Записались / работ" Value="@($"{Fmt.N(jam.Joined)} / {Fmt.N(jam.Submissions)}")" Large="true"
+                             Hint="@(jam is { Joined: > 0, Submissions: { } s } ? $"сдали {Fmt.Pct((double)s / jam.Joined.Value)}" : null)" />
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="2">
+                    <MudPaper Class="pa-4 itch-card" Outlined="true">
+                        <Kpi Label="Работ в базе" Value="@Fmt.N(vm.Rows.Count)" Large="true" Hint="@($"из них в каталоге игр: {Fmt.N(vm.Known)}")" />
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="2">
+                    <MudPaper Class="pa-4 itch-card" Outlined="true">
+                        <Kpi Label="Медиана оценок в джеме" Value="@Fmt.N(vm.MedianJamRatings, 0)" Large="true" Hint="сколько участников оценили работу" />
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="2">
+                    <MudPaper Class="pa-4 itch-card" Outlined="true">
+                        <Kpi Label="Медиана оценок на itch.io" Value="@Fmt.N(vm.MedianItchRatings, 0)" Large="true" Hint="у тех же игр сейчас" />
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="2">
+                    <MudPaper Class="pa-4 itch-card" Outlined="true">
+                        <Kpi Label="@($"Набрали {A.Params.SuccessThreshold}+ на itch.io")" Value="@Fmt.Pct(vm.SuccessShare, 1)" Large="true" Hint="среди игр из каталога" Color="#4CC38A" />
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="2">
+                    <MudPaper Class="pa-4 itch-card" Outlined="true">
+                        <Kpi Label="Связь джема и itch.io" Value="@(double.IsNaN(vm.Rho) ? "—" : vm.Rho.ToString("+0.00;−0.00;0", Fmt.Ru))" Large="true"
+                             Hint="@(double.IsNaN(vm.Rho) ? "нужно ≥ 10 игр с обоими числами" : RhoText(vm.Rho))"
+                             Tip="Ранговая корреляция Спирмена между оценками в джеме и оценками на itch.io сейчас. Высокая — успех в джеме переносится на страницу игры." />
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            @if (vm.Rows.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                    Участники этого джема ещё не собраны. Ежедневный сбор забирает участников нескольких крупных джемов за раз.
+                </MudAlert>
+            }
+            else
+            {
+                <MudTable T="EntryRow" Items="vm.Rows" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" SortLabel="Сортировка"
+                          Class="itch-table" Elevation="0" Filter="Matches">
+                    <ToolBarContent>
+                        <MudText Typo="Typo.h6">Работы</MudText>
+                        <MudSpacer />
+                        <MudTextField T="string" @bind-Value="_search" Placeholder="Поиск" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true" DebounceInterval="300" Variant="Variant.Outlined" Margin="Margin.Dense" Class="itch-search mr-2" />
+                        <ExportMenu T="EntryRow" Name="@($"jam-{jam.Slug}")" Rows="@(() => vm.Rows.Where(Matches))" Columns="ExportColumns" />
+                    </ToolBarContent>
+                    <HeaderContent>
+                        <MudTh><MudTableSortLabel T="EntryRow" SortBy="r => r.Title">Игра</MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.Entry.JamRatingCount ?? -1" InitialDirection="SortDirection.Descending">Оценок в джеме</MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.Entry.Coolness ?? -1">Coolness</MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.Game != null ? r.Game.Ratings : -1">Оценок на itch.io</MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.Game != null && r.Game.RatingAvg != null ? r.Game.RatingAvg.Value : -1">★</MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.After ?? -1">После джема</MudTableSortLabel></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Игра">
+                            @if (context.Game is { } g)
+                            {
+                                <GameCell Game="g" ShowCover="true" />
+                            }
+                            else
+                            {
+                                <MudLink Href="@context.Entry.Url" Target="_blank">@context.Title</MudLink>
+                                <div class="itch-game-sub">@context.Entry.AuthorName</div>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Оценок в джеме" Class="itch-num" Style="text-align:right">@Fmt.N(context.Entry.JamRatingCount)</MudTd>
+                        <MudTd DataLabel="Coolness" Class="itch-num" Style="text-align:right">@Fmt.N(context.Entry.Coolness, 0)</MudTd>
+                        <MudTd DataLabel="Оценок" Class="itch-num" Style="text-align:right">@(context.Game is { } g1 ? Fmt.N(g1.Ratings) : "—")</MudTd>
+                        <MudTd DataLabel="★" Class="itch-num" Style="text-align:right">@Fmt.Stars(context.Game?.RatingAvg)</MudTd>
+                        <MudTd DataLabel="После джема" Class="itch-num" Style="text-align:right">@Fmt.Times(context.After)</MudTd>
+                    </RowTemplate>
+                    <PagerContent>
+                        <MudTablePager RowsPerPageString="Строк:" InfoFormat="{first_item}–{last_item} из {all_items}" PageSizeOptions="new[] { 25, 50, 100, 250 }" />
+                    </PagerContent>
+                </MudTable>
+                <MudText Typo="Typo.caption" Class="itch-muted">
+                    «После джема» — во сколько раз оценок на itch.io больше, чем оценок внутри джема. Больше ×1 — игру продолжили находить после джема.
+                </MudText>
+            }
+        }
+    </DataGate>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    public sealed record EntryRow(JamEntry Entry, GameRow? Game, string Title, double? After);
+    private sealed record Vm(List<EntryRow> Rows, int Known, double MedianJamRatings, double MedianItchRatings, double SuccessShare, double Rho);
+
+    private Jam? _jam;
+    private List<JamEntry> _entries = [];
+    private bool _loaded;
+    private int _loadedId;
+    private Vm? _vm;
+    private string? _search;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId == Id) return;
+        _loadedId = Id;
+        _jam = await Queries.JamAsync(Id);
+        _entries = _jam is null ? [] : await Queries.JamEntriesAsync(Id);
+        _loaded = true;
+        await RecomputeAsync();
+    }
+
+    private bool Matches(EntryRow r) =>
+        string.IsNullOrWhiteSpace(_search) || r.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || (r.Entry.AuthorName?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private static string RhoText(double rho) => Math.Abs(rho) switch
+    {
+        >= 0.5 => "сильная связь",
+        >= 0.3 => "заметная связь",
+        >= 0.1 => "слабая связь",
+        _ => "связи почти нет",
+    };
+
+    protected override void Compute()
+    {
+        var rows = new List<EntryRow>(_entries.Count);
+        foreach (var e in _entries)
+        {
+            D.GamesById.TryGetValue(e.GameId, out var g);
+            if (g is not null && !F.Includes(g)) continue;
+            double? after = g is { RatingsKnown: true } && e.JamRatingCount is > 0 ? (double)g.Ratings / e.JamRatingCount.Value : null;
+            rows.Add(new EntryRow(e, g, g?.Title ?? e.Title ?? e.GameId.ToString(), after));
+        }
+
+        var known = rows.Where(r => r.Game is not null).ToList();
+        var jamRatings = Stats.Sorted(rows.Where(r => r.Entry.JamRatingCount is not null).Select(r => (double)r.Entry.JamRatingCount!.Value));
+        var itchRatings = Stats.Sorted(known.Where(r => r.Game!.RatingsKnown).Select(r => (double)r.Game!.Ratings));
+        var pairs = known.Where(r => r.Game!.RatingsKnown && r.Entry.JamRatingCount is not null).ToList();
+        var rho = pairs.Count >= 10
+            ? Stats.Spearman(pairs.Select(p => (double)p.Entry.JamRatingCount!.Value).ToList(), pairs.Select(p => (double)p.Game!.Ratings).ToList())
+            : double.NaN;
+
+        _vm = new Vm(rows, known.Count,
+            jamRatings.Length > 0 ? Stats.Median(jamRatings) : double.NaN,
+            itchRatings.Length > 0 ? Stats.Median(itchRatings) : double.NaN,
+            known.Count > 0 ? (double)known.Count(r => r.Game!.Ratings >= A.Params.SuccessThreshold) / known.Count : double.NaN,
+            rho);
+    }
+
+    private static readonly IReadOnlyList<ExportColumn<EntryRow>> ExportColumns =
+    [
+        new("Игра", r => r.Title),
+        new("Автор", r => r.Game?.AuthorName ?? r.Entry.AuthorName),
+        new("Ссылка", r => r.Game?.Url ?? r.Entry.Url),
+        new("Оценок в джеме", r => r.Entry.JamRatingCount),
+        new("Coolness", r => r.Entry.Coolness),
+        new("Оценок на itch.io", r => r.Game?.Ratings),
+        new("Средняя оценка", r => r.Game?.RatingAvg),
+        new("После джема, раз", r => r.After),
+    ];
+}

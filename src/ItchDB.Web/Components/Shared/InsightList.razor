@@ -1,0 +1,32 @@
+@* Conclusions with a tone marker and an optional link to the page with details. *@
+
+@if (Items.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="itch-muted">@Empty</MudText>
+}
+@foreach (var i in Items.Take(Max))
+{
+    <div class="itch-insight @Tone(i.Tone) mb-3">
+        <MudText Typo="Typo.subtitle2">@i.Title</MudText>
+        <MudText Typo="Typo.body2" Class="itch-muted">@i.Text</MudText>
+        @if (ShowLinks && i.Link is not null)
+        {
+            <MudLink Href="@i.Link" Typo="Typo.caption">подробнее →</MudLink>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<Insight> Items { get; set; } = [];
+    [Parameter] public int Max { get; set; } = int.MaxValue;
+    [Parameter] public bool ShowLinks { get; set; } = true;
+    [Parameter] public string Empty { get; set; } = "Выводов пока нет — данных слишком мало.";
+
+    private static string Tone(InsightTone t) => t switch
+    {
+        InsightTone.Good => "good",
+        InsightTone.Warn => "warn",
+        InsightTone.Bad => "bad",
+        _ => "info",
+    };
+}
