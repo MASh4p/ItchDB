@@ -40,6 +40,21 @@ public sealed class ItchHttpClientTests : IDisposable
     }
 
     [Fact]
+    public async Task SkipPause_ResetsTheChallengeStreak()
+    {
+        _handler.Challenge = true;
+        using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2)))
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _client.GetAsync(Url, cts.Token));
+        Assert.True(_status.ConsecutiveChallenges > 0);
+
+        _status.SkipPause();
+
+        Assert.False(_status.IsPaused);
+        Assert.False(_status.IsBlocked);
+        Assert.Equal(0, _status.ConsecutiveChallenges);
+    }
+
+    [Fact]
     public async Task GetAsync_ChallengeStartsThePause_AndGetNowAsyncDoesNotSendDuringIt()
     {
         _handler.Challenge = true;

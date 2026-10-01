@@ -19,7 +19,17 @@ public sealed class NetworkStatus
     public DateTime? LastChallengeAt { get; private set; }
     public bool IsBlocked { get; private set; }
 
+    /// <summary>What the user should do right now, for example solve the check in the Chrome window.</summary>
+    public string? Notice { get; private set; }
+
     public bool IsPaused => PausedUntil is { } until && until > DateTime.UtcNow;
+
+    public void SetNotice(string? value)
+    {
+        if (Notice == value) return;
+        Notice = value;
+        Changed?.Invoke();
+    }
 
     internal void RecordRequest(string url, int statusCode, bool failed)
     {
@@ -80,6 +90,7 @@ public sealed class NetworkStatus
         {
             PausedUntil = null;
             IsBlocked = false;
+            ConsecutiveChallenges = 0;
             cts = _skipPause;
         }
         cts.Cancel();

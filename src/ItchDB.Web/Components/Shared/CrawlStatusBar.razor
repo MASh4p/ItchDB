@@ -14,6 +14,12 @@
             </MudChip>
         </MudTooltip>
     }
+    else if (Net.Notice is { } notice)
+    {
+        <MudTooltip Text="@notice">
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.OpenInBrowser" OnClick="GoData">Проверка в Chrome</MudChip>
+        </MudTooltip>
+    }
     else if (Net.IsBlocked)
     {
         <MudTooltip Text="Cloudflare не пропускает запросы. Откройте «Сбор данных» и импортируйте cf_clearance.">

@@ -24,7 +24,8 @@ public sealed class ItchHttpClient(
     NetworkStatus status,
     CookieStore cookies,
     SettingsService settings,
-    ILogger<ItchHttpClient> log)
+    ILogger<ItchHttpClient> log,
+    BrowserFetcher? browser = null)
 {
     private const string DefaultAccept = "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8";
     private const string BlockedMessage =
@@ -69,6 +70,7 @@ public sealed class ItchHttpClient(
         if (!r.Challenge)
         {
             status.RecordSuccess();
+            status.SetNotice(null);
             cookies.Save();
         }
         return r;
@@ -92,12 +94,24 @@ public sealed class ItchHttpClient(
 
     private async Task<(FetchResult Result, bool Challenge)> SendAsync(string url, string accept, CancellationToken ct)
     {
+        if (browser is not null)
+        {
+            var page = await browser.TryGetAsync(url, ct);
+            if (page is not null)
+            {
+                var challenge = IsChallengeBody(page.Body);
+                status.RecordRequest(url, page.Status, challenge || page.Status >= 400 && page.Status != 404);
+                return (new FetchResult(page.Status, challenge ? "" : page.Body, page.FinalUrl), challenge);
+            }
+        }
+
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         var ua = settings.Current.UserAgent;
         if (!string.IsNullOrWhiteSpace(ua)) request.Headers.TryAddWithoutValidation("User-Agent", ua);
         request.Headers.TryAddWithoutValidation("Accept", accept);
         request.Headers.AcceptLanguage.Add(new StringWithQualityHeaderValue("en-US"));
         request.Headers.AcceptLanguage.Add(new StringWithQualityHeaderValue("en", 0.9));
+        BrowserHeaders.Apply(request, ua, accept);
 
         try
         {
@@ -114,6 +128,13 @@ public sealed class ItchHttpClient(
             log.LogWarning("Request failed for {Url}: {Message}", url, ex.Message);
             return (new FetchResult(0, "", url), false);
         }
+    }
+
+    /// <summary>One request to see whether the imported cookie is accepted. Does not start a Cloudflare pause.</summary>
+    public async Task<bool> ProbeAsync(CancellationToken ct)
+    {
+        var (result, challenge) = await SendThrottledAsync("https://itch.io/games", DefaultAccept, ct);
+        return !challenge && result.IsSuccess;
     }
 
     public static bool IsChallenge(HttpResponseMessage response, string body)

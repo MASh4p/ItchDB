@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddSingleton<NetworkStatus>();
         services.AddSingleton<RequestThrottle>();
         services.AddSingleton<CookieStore>();
+        services.AddSingleton<BrowserFetcher>();
 
         services.AddSingleton<CatalogIngestor>();
         services.AddSingleton<CursorStore>();

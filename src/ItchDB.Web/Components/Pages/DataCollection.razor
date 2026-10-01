@@ -6,6 +6,7 @@
 @inject CursorStore Cursors
 @inject SettingsService Settings
 @inject CookieStore Cookies
+@inject ItchHttpClient Http
 @inject ISnackbar Snackbar
 
 <PageTitle>Сбор данных — ItchDB</PageTitle>
@@ -95,7 +96,11 @@
                 <MudText Typo="Typo.caption" Class="itch-muted d-block mt-2" Style="word-break:break-all">Последний запрос @Fmt.Ago(Net.LastRequestAt): @url</MudText>
             }
 
-            @if (Net.IsPaused && Net.PausedUntil is { } until)
+            @if (Net.Notice is { } notice)
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true">@notice</MudAlert>
+            }
+            else if (Net.IsPaused && Net.PausedUntil is { } until)
             {
                 <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">
                     itch.io показал проверку Cloudflare (@Net.ConsecutiveChallenges-й раз подряд). Сбор продолжится через @Fmt.Countdown(until).
@@ -116,16 +121,26 @@
             <MudDivider Class="my-3" />
             <MudText Typo="Typo.subtitle2">Если Cloudflare блокирует сбор</MudText>
             <MudText Typo="Typo.body2" Class="itch-muted mb-2">
-                Откройте itch.io в браузере, пройдите проверку, затем в DevTools → Application → Cookies → https://itch.io скопируйте значение
-                <code>cf_clearance</code>. Cookie привязан к браузеру (User-Agent в настройках должен совпадать с вашим браузером) и живёт около месяца.
+                Сбор открывает отдельное окно Chrome (или Edge). Проверка Cloudflare проходит в нём: чаще всего сама,
+                иногда нужно нажать её в этом окне. Пауза на 10 минут начинается, только если за 3 минуты проверка так и не исчезла.
+                Вставленный сюда cookie приложению не подходит — Cloudflare привязывает его к браузеру, поэтому код 403 остаётся.
             </MudText>
+            <MudTextField T="string" @bind-Value="_cfClearance" Label="cf_clearance или строка Cookie" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Lines="2" Class="mb-2" Disabled="_importBusy" />
+            <MudTextField T="string" @bind-Value="_userAgent" Label="User-Agent браузера" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Lines="2" Class="mb-2" Disabled="_importBusy" />
             <div class="d-flex align-center gap-2">
-                <MudTextField T="string" @bind-Value="_cfClearance" Label="cf_clearance" Variant="Variant.Outlined" Margin="Margin.Dense" InputType="InputType.Password" Class="flex-grow-1" />
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImportCfAsync" Disabled="@string.IsNullOrWhiteSpace(_cfClearance)">Импорт</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImportCfAsync" Disabled="@(string.IsNullOrWhiteSpace(_cfClearance) || _importBusy)">
+                    @(_importBusy ? "Проверяю…" : "Импорт и проверка")
+                </MudButton>
                 <MudTooltip Text="Удалить все cookies itch.io">
-                    <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep" OnClick="ClearCookiesAsync" />
+                    <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep" OnClick="ClearCookiesAsync" Disabled="_importBusy" />
                 </MudTooltip>
             </div>
+            @if (_importNote is { } note)
+            {
+                <MudAlert Severity="@(_importOk ? Severity.Success : Severity.Warning)" Dense="true" Class="mt-2">@note</MudAlert>
+            }
         </MudPaper>
     </MudItem>
 
@@ -303,6 +318,10 @@
     private DateTime? _lastSuccess;
     private DateTime? _nextDue;
     private string? _cfClearance;
+    private string? _userAgent;
+    private bool _importBusy;
+    private bool _importOk;
+    private string? _importNote;
     private bool _onlyProblems;
     private bool _confirmReset;
     private Timer? _timer;
@@ -324,6 +343,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _userAgent = Settings.Current.UserAgent;
         Crawl.Changed += OnChanged;
         Net.Changed += OnChanged;
         Settings.Changed += OnChanged;
@@ -370,11 +390,49 @@
     private async Task ImportCfAsync()
     {
         if (string.IsNullOrWhiteSpace(_cfClearance)) return;
-        await Settings.SetCfClearanceAsync(_cfClearance);
-        Cookies.ImportCfClearance(_cfClearance);
+        IReadOnlyList<(string Name, string Value)> pairs;
+        try
+        {
+            pairs = CookieStore.Parse(_cfClearance);
+        }
+        catch (FormatException ex)
+        {
+            _importOk = false;
+            _importNote = ex.Message;
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_userAgent))
+        {
+            var model = Settings.Clone();
+            model.UserAgent = _userAgent.Trim();
+            await Settings.SaveAsync(model);
+        }
+
+        await Settings.SetCfClearanceAsync(pairs.First(p => p.Name == "cf_clearance").Value);
+        Cookies.Import(pairs);
         Net.SkipPause();
         _cfClearance = null;
-        Snackbar.Add("cf_clearance сохранён (зашифрован) и применён", Severity.Success);
+        _importBusy = true;
+        _importNote = "Cookie сохранён. Один запрос к itch.io проверяет, пускает ли он сбор…";
+        _importOk = true;
+        try
+        {
+            var accepted = await Http.ProbeAsync(CancellationToken.None);
+            _importOk = accepted;
+            _importNote = accepted
+                ? "itch.io открыл страницу без проверки. Сбор может продолжаться."
+                : "Cookie сохранён, но itch.io снова показал проверку. User-Agent должен быть скопирован из того же браузера командой navigator.userAgent, и cookie нужно брать сразу после пройденной проверки. Если так и сделано, Cloudflare привязал прохождение к самому браузеру, и вставленный cookie приложению не подходит: сбор продолжится сам после паузы.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _importOk = false;
+            _importNote = "Cookie сохранён, но проверить его не удалось: " + ex.Message;
+        }
+        finally
+        {
+            _importBusy = false;
+        }
     }
 
     private async Task ClearCookiesAsync()
