@@ -65,6 +65,36 @@ public sealed class NetworkStatus
         }
     }
 
+    /// <summary>
+    /// Starts the next pause. Returns 0 when a pause is already running (parallel requests must not stack it)
+    /// and null when the configured pauses are exhausted.
+    /// </summary>
+    internal int? StartPause(int[] minutes)
+    {
+        int n;
+        var exhausted = false;
+        lock (_gate)
+        {
+            if (PausedUntil is { } until && until > DateTime.UtcNow) return 0;
+            ConsecutiveChallenges++;
+            LastChallengeAt = DateTime.UtcNow;
+            n = ConsecutiveChallenges;
+            if (n > minutes.Length)
+            {
+                IsBlocked = true;
+                exhausted = true;
+            }
+            else
+            {
+                PausedUntil = DateTime.UtcNow + TimeSpan.FromMinutes(minutes[n - 1]);
+                _skipPause.Dispose();
+                _skipPause = new CancellationTokenSource();
+            }
+        }
+        Changed?.Invoke();
+        return exhausted ? null : n;
+    }
+
     internal void BeginPause(TimeSpan duration)
     {
         lock (_gate)
@@ -91,6 +121,7 @@ public sealed class NetworkStatus
             PausedUntil = null;
             IsBlocked = false;
             ConsecutiveChallenges = 0;
+            Notice = null;
             cts = _skipPause;
         }
         cts.Cancel();

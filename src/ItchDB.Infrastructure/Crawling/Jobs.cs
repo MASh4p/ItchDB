@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Xml;
 using ItchDB.Core.Catalog;
 using ItchDB.Core.Domain;
+using ItchDB.Infrastructure.Http;
 using ItchDB.Infrastructure.Parsing;
 using Microsoft.EntityFrameworkCore;
 
@@ -76,7 +77,7 @@ public sealed class NewReleasesJob(int maxPages, bool stopAtKnown) : ICrawlJob
             ListingPage lp;
             try
             {
-                lp = ListingParser.ParseJson(r.Body);
+                lp = ListingParser.ParseRequested(r.Body, json: true);
             }
             catch (JsonException ex)
             {
@@ -134,52 +135,81 @@ public sealed class FeaturedJob(int pages) : ICrawlJob
 /// <summary>Fetches game pages in priority order: tracked, fresh releases, most rated without details, stale.</summary>
 public sealed class GameDetailsJob(int limit) : ICrawlJob
 {
+    /// <summary>One game page at a time, well apart from the next, so a burst does not earn HTTP 400.</summary>
+    public const int GapSeconds = 12;
+
     public string Title => "Страницы игр (теги, даты, движок, комментарии)";
 
     public async Task RunAsync(CrawlContext ctx)
     {
         var queue = await SelectAsync(ctx, Math.Min(limit, ctx.RemainingBudget));
         int ok = 0, failed = 0;
-        for (var i = 0; i < queue.Count && ctx.HasBudget; i++)
+        try
         {
-            var (id, url) = queue[i];
-            ctx.Step($"Игра {i + 1} из {queue.Count}: {url}", i + 1, queue.Count);
-            var r = await ctx.FetchAsync(url);
-            if (r is null) continue;
-            if (r.IsNotFound)
+            for (var i = 0; i < queue.Count && ctx.HasBudget; i++)
             {
-                await ctx.Ingest.MarkDetailsFailedAsync(id, removed: true, ctx.Ct);
-                failed++;
-                continue;
+                var item = queue[i];
+                ctx.Step($"Игра {i + 1} из {queue.Count}: {item.Url}", i + 1, queue.Count);
+                var fetched = await ctx.FetchAsync(item.Url);
+                if (await SaveOneAsync(ctx, item.Id, item.Url, fetched)) ok++;
+                else failed++;
+                if (i + 1 < queue.Count && ctx.HasBudget)
+                    await Task.Delay(TimeSpan.FromSeconds(GapSeconds), ctx.Ct);
             }
-            if (!r.IsSuccess)
-            {
-                await ctx.Ingest.MarkDetailsFailedAsync(id, removed: false, ctx.Ct);
-                failed++;
-                continue;
-            }
-            var data = GamePageParser.Parse(r.Body);
-            if (data.Id is null)
-            {
-                ctx.ParseError($"{url}: не найден id игры");
-                await ctx.Ingest.MarkDetailsFailedAsync(id, removed: false, ctx.Ct);
-                failed++;
-                continue;
-            }
-            await ctx.Ingest.IngestGameDetailsAsync(data, url, ctx.Ct);
-            ok++;
         }
-        ctx.Info($"Страницы игр: обработано {ok}, ошибок {failed}");
+        finally
+        {
+            ctx.Info($"Страницы игр: обработано {ok}, ошибок {failed}");
+        }
     }
+
+    /// <returns>true when the page was stored.</returns>
+    private static async Task<bool> SaveOneAsync(CrawlContext ctx, long id, string url, FetchResult? r)
+    {
+        if (r is null) return false;
+        if (r.IsNotFound)
+        {
+            await ctx.Ingest.MarkDetailsFailedAsync(id, removed: true, ctx.Ct);
+            return false;
+        }
+        if (!r.IsSuccess)
+        {
+            if (r.StatusCode is not (400 or 401 or 408 or 429))
+                await ctx.Ingest.MarkDetailsFailedAsync(id, removed: false, ctx.Ct);
+            return false;
+        }
+        var data = GamePageParser.Parse(r.Body);
+        if (data.Id is null)
+        {
+            if (!LooksLikeGamePage(r.Body))
+            {
+                ctx.Warn($"{url}: ответ не похож на страницу игры, повторим позже");
+                return false;
+            }
+            ctx.ParseError($"{url}: не найден id игры");
+            await ctx.Ingest.MarkDetailsFailedAsync(id, removed: false, ctx.Ct);
+            return false;
+        }
+        await ctx.Ingest.IngestGameDetailsAsync(data, url, ctx.Ct);
+        return true;
+    }
+
+    /// <summary>
+    /// An embed widget (itch.io/embed/…) also contains game_title, but it is not the game page.
+    /// Treating it as one counted a parse failure and, after three of them, stopped retrying the title.
+    /// </summary>
+    private static bool LooksLikeGamePage(string body) =>
+        body.Contains("name=\"itch:path\"", StringComparison.Ordinal)
+        || body.Contains("init_ViewGame(", StringComparison.Ordinal)
+        || body.Contains("init_ViewHtmlGame(", StringComparison.Ordinal)
+        || body.Contains("name=\"game_id\"", StringComparison.Ordinal)
+        || body.Contains("I.current_game", StringComparison.Ordinal);
 
     private static async Task<List<(long Id, string Url)>> SelectAsync(CrawlContext ctx, int limit)
     {
         if (limit <= 0) return [];
         await using var db = await ctx.Db.CreateDbContextAsync(ctx.Ct);
-        var now = DateTime.UtcNow;
-        var recent = now.AddDays(-30);
-        var refreshNew = now.AddDays(-3);
-        var stale = now.AddDays(-30);
+        var stale = DateTime.UtcNow.AddDays(-30);
         var q = db.Games.AsNoTracking().Where(g => !g.IsRemoved && g.DetailsFailures < 3 && g.Url != "");
 
         var tracked = await db.TrackedGames.AsNoTracking().Where(t => t.GameId != null).Select(t => t.GameId!.Value).ToListAsync(ctx.Ct);
@@ -197,14 +227,17 @@ public sealed class GameDetailsJob(int limit) : ICrawlJob
         var trackedRows = await q.Where(g => tracked.Contains(g.Id)).Select(g => new { g.Id, g.Url }).ToListAsync(ctx.Ct);
         Add(trackedRows.Select(x => (x.Id, x.Url)), limit);
 
-        var fresh = await q.Where(g => g.PublishedAt >= recent && (g.DetailsFetchedAt == null || g.DetailsFetchedAt < refreshNew))
-            .OrderByDescending(g => g.RatingCount).ThenByDescending(g => g.PublishedAt)
-            .Select(g => new { g.Id, g.Url }).Take(limit).ToListAsync(ctx.Ct);
-        Add(fresh.Select(x => (x.Id, x.Url)), Math.Max(1, limit / 4));
-
+        // Most-rated games first, so every genre's popular titles get a page before the long tail.
         var never = await q.Where(g => g.DetailsFetchedAt == null && g.RatingCount > 0)
             .OrderByDescending(g => g.RatingCount).Select(g => new { g.Id, g.Url }).Take(limit).ToListAsync(ctx.Ct);
         Add(never.Select(x => (x.Id, x.Url)), limit);
+
+        // 2025 and 2026 have no year filter: a page is the only way to learn the year. Take a slice of them
+        // after the current popularity head, not instead of it.
+        var undated = await q.Where(g => g.DetailsFetchedAt == null && g.PublishedYear == null)
+            .OrderByDescending(g => g.RatingCount).ThenByDescending(g => g.FirstSeenAt)
+            .Select(g => new { g.Id, g.Url }).Take(limit).ToListAsync(ctx.Ct);
+        Add(undated.Select(x => (x.Id, x.Url)), Math.Max(1, limit / 5));
 
         var old = await q.Where(g => g.DetailsFetchedAt < stale && g.RatingCount > 0)
             .OrderByDescending(g => g.RatingCount).Select(g => new { g.Id, g.Url }).Take(limit).ToListAsync(ctx.Ct);

@@ -51,7 +51,8 @@ public sealed class AppSettingsModel
     public int DailyDetails { get; set; } = 600;
     public int DailyProfiles { get; set; } = 120;
     public int DailyBacklogPages { get; set; } = 800;
-    public int DeepListPages { get; set; } = 6000;
+    /// <summary>0 (and the previous default 6000) means the deep catalog runs until its lists are finished.</summary>
+    public int DeepListPages { get; set; }
     public int DeepMinTagProjects { get; set; } = 300;
     public int DeepRefreshDays { get; set; } = 30;
     public int DeepDetails { get; set; } = 3000;

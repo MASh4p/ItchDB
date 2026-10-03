@@ -9,6 +9,16 @@ namespace ItchDB.Infrastructure.Parsing;
 /// <summary>Parses browse pages: the JSON variant (?format=json) and the full HTML page.</summary>
 public static partial class ListingParser
 {
+    /// <summary>
+    /// JSON lists are sometimes answered with the HTML page (a browser navigation, or a check page).
+    /// An HTML body is read as a listing instead of failing the JSON parser.
+    /// </summary>
+    public static ListingPage ParseRequested(string body, bool json)
+    {
+        if (json && !body.AsSpan().TrimStart().StartsWith("<")) return ParseJson(body);
+        return ParseHtml(body);
+    }
+
     public static ListingPage ParseJson(string json)
     {
         using var doc = JsonDocument.Parse(json);

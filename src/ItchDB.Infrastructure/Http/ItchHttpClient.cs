@@ -40,6 +40,7 @@ public sealed class ItchHttpClient(
             var (result, challenge) = await SendThrottledAsync(url, accept, ct);
             if (!challenge) return result;
             if (OnChallenge(url) is null) throw new CloudflareBlockedException(BlockedMessage);
+            await status.WaitWhilePausedAsync(ct);
         }
     }
 
@@ -77,18 +78,14 @@ public sealed class ItchHttpClient(
     }
 
     /// <summary>Escalates the shared pause; returns null once the configured pauses are exhausted.</summary>
+    /// <summary>Null means the pauses are exhausted. Zero means another request already started the current pause.</summary>
     private TimeSpan? OnChallenge(string url)
     {
-        var n = status.RecordChallenge();
         var pauses = settings.Current.CloudflarePauseMinutes is { Length: > 0 } p ? p : [10, 20, 40];
-        if (n > pauses.Length)
-        {
-            status.MarkBlocked();
-            return null;
-        }
-        var pause = TimeSpan.FromMinutes(pauses[n - 1]);
-        log.LogWarning("Cloudflare challenge on {Url}; pausing for {Minutes} min (attempt {N})", url, pause.TotalMinutes, n);
-        status.BeginPause(pause);
+        var n = status.StartPause(pauses);
+        if (n is null or 0) return n is null ? null : TimeSpan.Zero;
+        var pause = TimeSpan.FromMinutes(pauses[n.Value - 1]);
+        log.LogWarning("itch.io blocked {Url} (check or HTTP 400); pausing for {Minutes} min (attempt {N})", url, pause.TotalMinutes, n);
         return pause;
     }
 
@@ -99,10 +96,13 @@ public sealed class ItchHttpClient(
             var page = await browser.TryGetAsync(url, ct);
             if (page is not null)
             {
-                var challenge = IsChallengeBody(page.Body);
+                var challenge = IsBlocked(page.Status, page.Body);
+                throttle.PreferFast(!challenge);
+                if (challenge) status.SetNotice(BrowserFetcher.BlockNotice);
                 status.RecordRequest(url, page.Status, challenge || page.Status >= 400 && page.Status != 404);
                 return (new FetchResult(page.Status, challenge ? "" : page.Body, page.FinalUrl), challenge);
             }
+            throttle.PreferFast(false);
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -118,7 +118,8 @@ public sealed class ItchHttpClient(
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
             var code = (int)response.StatusCode;
-            var challenge = IsChallenge(response, body);
+            var challenge = IsChallenge(response, body) || code is 400 or 429;
+            if (challenge) status.SetNotice(BrowserFetcher.BlockNotice);
             status.RecordRequest(url, code, challenge || code >= 400 && code != 404);
             return (new FetchResult(code, challenge ? "" : body, response.RequestMessage?.RequestUri?.ToString() ?? url), challenge);
         }
@@ -146,6 +147,9 @@ public sealed class ItchHttpClient(
             return false;
         return IsChallengeBody(body);
     }
+
+    /// <summary>A captcha page, or the 400/429 streak itch.io returns once it stops accepting the client.</summary>
+    public static bool IsBlocked(int status, string body) => IsChallengeBody(body) || status is 400 or 429;
 
     public static bool IsChallengeBody(string body) =>
         body.Contains("<title>Just a moment...</title>", StringComparison.OrdinalIgnoreCase)

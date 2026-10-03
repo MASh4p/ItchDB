@@ -26,9 +26,13 @@ public sealed class CrawlContext
         IDbContextFactory<ItchDbContext> db,
         AppSettingsModel settings,
         int requestBudget,
-        CancellationToken ct)
+        CancellationToken ct,
+        CrawlContext? parent = null,
+        bool quiet = false)
     {
         _owner = owner;
+        _parent = parent;
+        _quiet = quiet;
         Profile = profile;
         Http = http;
         Ingest = ingest;
@@ -37,7 +41,15 @@ public sealed class CrawlContext
         Settings = settings;
         RequestBudget = requestBudget;
         Ct = ct;
+        if (parent is not null) _cap = requestBudget;
     }
+
+    /// <summary>
+    /// A separate request budget that does not consume the foreground job's cap.
+    /// Progress text stays with the foreground job; counters are added to the root run.
+    /// </summary>
+    public CrawlContext Branch(int budget, CancellationToken ct) =>
+        new(_owner, Profile, Http, Ingest, Cursors, Db, Settings, budget, ct, Root, quiet: true);
 
     public CrawlProfile Profile { get; }
     public ItchHttpClient Http { get; }
@@ -49,16 +61,22 @@ public sealed class CrawlContext
     public DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
 
     public int RequestBudget { get; }
-    public int RequestsUsed { get; private set; }
+    private readonly CrawlContext? _parent;
+    private readonly bool _quiet;
+    private CrawlContext Root => _parent ?? this;
+    private int _requests;
+    private int _spent;
+    /// <summary>Requests of this run, including background game pages.</summary>
+    public int RequestsUsed => Volatile.Read(ref _requests);
     private int _cap = int.MaxValue;
-    public int RemainingBudget => Math.Max(0, Math.Min(RequestBudget, _cap) - RequestsUsed);
-    public bool HasBudget => RequestsUsed < Math.Min(RequestBudget, _cap);
+    public int RemainingBudget => Math.Max(0, Math.Min(RequestBudget, _cap) - Volatile.Read(ref _spent));
+    public bool HasBudget => Volatile.Read(ref _spent) < Math.Min(RequestBudget, _cap);
 
     /// <summary>Limits the requests of the current job; budget left unused by earlier jobs is not carried over.</summary>
     public IDisposable LimitBudget(int requests)
     {
         var previous = _cap;
-        _cap = RequestsUsed + Math.Max(0, requests);
+        _cap = Volatile.Read(ref _spent) + Math.Max(0, requests);
         return new Restore(() => _cap = previous);
     }
 
@@ -67,30 +85,39 @@ public sealed class CrawlContext
         public void Dispose() => action();
     }
 
-    public int Errors { get; private set; }
-    public int ParseErrors { get; private set; }
-    public int GamesUpserted { get; private set; }
+    private int _errors;
+    private int _parseErrors;
+    private int _gamesUpserted;
+    public int Errors => Volatile.Read(ref Root._errors);
+    public int ParseErrors => Volatile.Read(ref Root._parseErrors);
+    public int GamesUpserted => Volatile.Read(ref Root._gamesUpserted);
 
     /// <summary>Fetches a URL; returns null when the request failed after retries (already logged and counted).</summary>
     public async Task<FetchResult?> FetchAsync(string url, string? accept = null)
     {
         await _owner.WaitIfPausedAsync(Ct);
         Ct.ThrowIfCancellationRequested();
-        RequestsUsed++;
+        Interlocked.Increment(ref _spent);
+        Interlocked.Increment(ref Root._requests);
         _owner.OnRequest();
         var result = accept is null ? await Http.GetAsync(url, Ct) : await Http.GetAsync(url, Ct, accept);
         if (result.StatusCode == 0 || result.StatusCode >= 400 && !result.IsNotFound)
         {
-            Errors++;
-            Warn($"HTTP {result.StatusCode}: {url}");
+            Interlocked.Increment(ref Root._errors);
+            Warn(result.StatusCode == 0
+                ? $"нет ответа, соединение оборвалось: {url}"
+                : $"HTTP {result.StatusCode}: {url}");
             return result.StatusCode == 0 ? null : result;
         }
         return result;
     }
 
-    public void CountGames(IngestResult r) => GamesUpserted += r.Inserted + r.Updated;
+    public void CountGames(IngestResult r) => Interlocked.Add(ref Root._gamesUpserted, r.Inserted + r.Updated);
 
-    public void Step(string text, int done = 0, int total = 0) => _owner.ReportStep(text, done, total);
+    public void Step(string text, int done = 0, int total = 0)
+    {
+        if (!_quiet) _owner.ReportStep(text, done, total);
+    }
 
     public void Info(string message) => _owner.Log(LogLevel.Information, message);
 
@@ -98,13 +125,13 @@ public sealed class CrawlContext
 
     public void ParseError(string message)
     {
-        ParseErrors++;
+        Interlocked.Increment(ref Root._parseErrors);
         _owner.Log(LogLevel.Warning, "Ошибка разбора: " + message);
     }
 
     public void Error(string message)
     {
-        Errors++;
+        Interlocked.Increment(ref Root._errors);
         _owner.Log(LogLevel.Error, message);
     }
 }

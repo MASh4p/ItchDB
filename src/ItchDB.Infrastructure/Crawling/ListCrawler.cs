@@ -38,37 +38,59 @@ public static class ListCrawler
         int pages = 0;
         bool reachedEnd = false, truncated = false;
 
-        for (var page = startPage; page <= maxPages; page++)
+        for (var page = startPage; page <= maxPages;)
         {
             if (!ctx.HasBudget) break;
-            var html = page == 1;
-            var url = spec.Url(page, json: !html);
-            ctx.Step($"{spec} — стр. {page}{(total is { } t ? $" из ~{Math.Min(ItchCatalog.MaxPages, (t + 35) / 36)}" : "")}",
+            // Page 1 is the HTML counter. Later pages are JSON and are fetched together.
+            var batch = page == 1 ? 1 : Math.Min(4, Math.Min(maxPages - page + 1, Math.Max(1, ctx.RemainingBudget)));
+            ctx.Step($"{spec} — стр. {page}{(batch > 1 ? $"–{page + batch - 1}" : "")}{(total is { } t ? $" из ~{Math.Min(ItchCatalog.MaxPages, (t + 35) / 36)}" : "")}",
                 page, Math.Min(maxPages, total is { } tt ? (tt + 35) / 36 : maxPages));
 
-            var r = await ctx.FetchAsync(url);
-            if (r is null) break;
+            var fetched = new FetchResult?[batch];
+            await Task.WhenAll(Enumerable.Range(0, batch).Select(async n =>
+            {
+                var p = page + n;
+                fetched[n] = await ctx.FetchAsync(spec.Url(p, json: p != 1));
+            }));
+
+            var stop = false;
+            for (var n = 0; n < batch && !stop; n++)
+            {
+                var current = page + n;
+                var html = current == 1;
+                var url = spec.Url(current, json: !html);
+                var r = fetched[n];
+            if (r is null) { stop = true; break; }
             if (r.IsNotFound || r.IsSuccess && IsRedirectedAway(r, spec))
             {
-                if (page == 1)
+                if (current == 1)
                 {
                     ctx.Warn($"itch.io не поддерживает такой список: {spec}{(r.IsNotFound ? "" : $" (перенаправил на {new Uri(r.Url).AbsolutePath})")}");
                     await ctx.Cursors.SetAsync(cursorKey, new ListCursor(0, ListStatus.Unsupported, null, DateTime.UtcNow), ctx.Ct);
                     return new ListOutcome(0, true, false, null, Unsupported: true);
                 }
                 reachedEnd = true;
+                stop = true;
                 break;
             }
-            if (!r.IsSuccess) break;
+            if (!r.IsSuccess) { stop = true; break; }
 
             ListingPage lp;
+            var jsonBecameHtml = !html && r.Body.AsSpan().TrimStart().StartsWith("<");
             try
             {
-                lp = html ? ListingParser.ParseHtml(r.Body) : ListingParser.ParseJson(r.Body);
+                lp = ListingParser.ParseRequested(r.Body, json: !html);
             }
             catch (Exception ex) when (ex is JsonException or FormatException)
             {
                 ctx.ParseError($"{url}: {ex.Message}");
+                stop = true;
+                break;
+            }
+            if (jsonBecameHtml && lp.Cards.Count == 0)
+            {
+                ctx.ParseError($"{url}: вместо JSON пришла HTML-страница без списка игр");
+                stop = true;
                 break;
             }
 
@@ -92,23 +114,28 @@ public static class ListCrawler
             {
                 ctx.CountGames(await ctx.Ingest.IngestCardsAsync(lp.Cards, cardCtx, ctx.Ct));
                 if (task.RecordPositions)
-                    await ctx.Ingest.SavePositionsAsync(ctx.Today, spec.Key, (page - 1) * ItchCatalog.PageSize + 1, lp.Cards.Select(c => c.Id).ToList(), ctx.Ct);
+                    await ctx.Ingest.SavePositionsAsync(ctx.Today, spec.Key, (current - 1) * ItchCatalog.PageSize + 1, lp.Cards.Select(c => c.Id).ToList(), ctx.Ct);
             }
-            pages++;
-            if (task.UseCursor) await ctx.Cursors.SetAsync(cursorKey, new ListCursor(page, ListStatus.InProgress, total, DateTime.UtcNow), ctx.Ct);
+            pages = current;
+            if (task.UseCursor) await ctx.Cursors.SetAsync(cursorKey, new ListCursor(current, ListStatus.InProgress, total, DateTime.UtcNow), ctx.Ct);
 
             var rawCount = html ? lp.Cards.Count : Math.Max(lp.NumItems, lp.Cards.Count);
             if (rawCount < ItchCatalog.PageSize)
             {
                 reachedEnd = true;
+                stop = true;
                 break;
             }
             if (task.StopAtUnrated && spec.IsTopRated && lp.Cards.Any(c => !c.HasRating))
             {
                 reachedEnd = true;
+                stop = true;
                 break;
             }
-            if (page == ItchCatalog.MaxPages) truncated = !spec.IsTopRated || lp.Cards.All(c => c.HasRating);
+            if (current == ItchCatalog.MaxPages) truncated = !spec.IsTopRated || lp.Cards.All(c => c.HasRating);
+            }
+            if (stop) break;
+            page += batch;
         }
 
         if (task.UseCursor && (reachedEnd || truncated))

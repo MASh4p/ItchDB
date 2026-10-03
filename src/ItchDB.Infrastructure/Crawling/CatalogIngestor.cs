@@ -20,10 +20,28 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 {
     private readonly ConcurrentDictionary<string, int> _tagIds = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _tagLock = new(1, 1);
+    private readonly SemaphoreSlim _write = new(1, 1);
+
+    /// <summary>One writer at a time: list pages and background game pages save into the same SQLite file.</summary>
+    private async Task<IAsyncDisposable> WritesAsync(CancellationToken ct)
+    {
+        await _write.WaitAsync(ct);
+        return new WriteHold(_write);
+    }
+
+    private sealed class WriteHold(SemaphoreSlim gate) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync()
+        {
+            gate.Release();
+            return ValueTask.CompletedTask;
+        }
+    }
 
     public async Task<IngestResult> IngestCardsAsync(IReadOnlyList<ParsedGameCard> cards, CardContext ctx, CancellationToken ct)
     {
         if (cards.Count == 0) return new IngestResult(0, 0);
+        await using var write = await WritesAsync(ct);
         var now = DateTime.UtcNow;
         var today = DateOnly.FromDateTime(now);
 
@@ -107,6 +125,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task IngestGameDetailsAsync(GamePageData data, string url, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         if (data.Id is not { } id) return;
         var now = DateTime.UtcNow;
         var today = DateOnly.FromDateTime(now);
@@ -191,6 +210,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task MarkDetailsFailedAsync(long gameId, bool removed, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var g = await db.Games.FirstOrDefaultAsync(x => x.Id == gameId, ct);
         if (g is null) return;
@@ -202,6 +222,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task SavePositionsAsync(DateOnly day, string listKey, int firstPosition, IReadOnlyList<long> gameIds, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         if (gameIds.Count == 0) return;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var last = firstPosition + gameIds.Count - 1;
@@ -228,6 +249,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task SaveListingTotalAsync(DateOnly day, string filterKey, int results, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var row = await db.ListingTotals.FirstOrDefaultAsync(x => x.Day == day && x.FilterKey == filterKey, ct);
         if (row is null) db.ListingTotals.Add(new ListingTotalSnapshot { Day = day, FilterKey = filterKey, Results = results });
@@ -237,6 +259,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task<int> ApplyRssAsync(IReadOnlyList<RssGameItem> items, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         if (items.Count == 0) return 0;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var urls = items.Select(i => i.Url).Distinct().ToList();
@@ -260,6 +283,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task IngestTagCatalogAsync(TagCatalogPage page, DateOnly day, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         var tagIds = await EnsureTagsAsync(page.Entries.Select(e => new LinkRef(e.Slug, e.Name)).Concat(page.AllTags), ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var ids = tagIds.Values.ToList();
@@ -292,6 +316,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task IngestProfileAsync(long developerId, ProfileData profile, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         var now = DateTime.UtcNow;
         var today = DateOnly.FromDateTime(now);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -313,6 +338,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task MarkProfileFailedAsync(long developerId, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var dev = await db.Developers.FirstOrDefaultAsync(d => d.Id == developerId, ct);
         if (dev is null) return;
@@ -323,6 +349,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task IngestJamCellsAsync(IReadOnlyList<JamCell> cells, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         if (cells.Count == 0) return;
         var now = DateTime.UtcNow;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -363,6 +390,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task IngestJamPageAsync(int jamId, JamPageData page, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var j = await db.Jams.FirstOrDefaultAsync(x => x.Id == jamId, ct);
         if (j is null) return;
@@ -382,6 +410,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task<int> IngestJamEntriesAsync(int jamId, IReadOnlyList<JamEntryData> entries, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         var now = DateTime.UtcNow;
         foreach (var chunk in entries.DistinctBy(e => e.GameId).Chunk(400))
         {
@@ -441,6 +470,7 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
 
     public async Task<int> IngestFeaturedAsync(IReadOnlyList<RssGameItem> items, CancellationToken ct)
     {
+        await using var write = await WritesAsync(ct);
         var now = DateTime.UtcNow;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var urls = items.Select(i => i.Url).Distinct().ToList();

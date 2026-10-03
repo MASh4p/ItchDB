@@ -76,4 +76,18 @@ public class ListingParserTests
         Assert.Contains(page.Cards, c => c.Platforms.HasFlag(Platforms.Windows));
         Assert.Contains(page.Cards, c => c.PriceCents == 100);
     }
+
+    [Fact]
+    public void ParseRequested_ReadsHtmlWhenJsonWasExpected()
+    {
+        const string html = """
+            <div class="game_cell" data-game_id="42"><a class="title" href="https://author.itch.io/game">Name</a></div>
+            """;
+
+        var page = ListingParser.ParseRequested(html, json: true);
+
+        var card = Assert.Single(page.Cards);
+        Assert.Equal(42, card.Id);
+        Assert.Equal("Name", card.Title);
+    }
 }

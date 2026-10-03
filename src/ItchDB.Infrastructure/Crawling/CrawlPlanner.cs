@@ -119,7 +119,9 @@ public static class CrawlPlanner
     private static List<PlannedJob> Deep(AppSettingsModel s) =>
     [
         new(new TagCatalogJob(), 30),
-        new(new ListsJob("Полный каталог по сегментам (годы → цена → жанр, теги, движки)", DeepBacklogAsync), s.DeepListPages),
+        new(new NewReleasesJob(40, stopAtKnown: false), 80),
+        new(new GameDetailsJob(Math.Max(s.DeepDetails, 8_000)), Math.Max(s.DeepDetails, 8_000)),
+        new(new ListsJob("Полный каталог по сегментам (годы → цена → жанр, теги, движки, 18+)", DeepBacklogAsync), CatalogBudget(s)),
         new(new ListsJob("Порог входа: первая страница popular каждого тега", async ctx =>
         {
             var tasks = new List<ListTask> { new(ListSpec.Of(ListSpec.Popular), 5, StopAtUnrated: false, RecordPositions: true) };
@@ -128,9 +130,8 @@ public static class CrawlPlanner
             tasks.AddRange((await EnginesAsync(ctx)).Select(t => new ListTask(ListSpec.Of(ListSpec.Popular, t), 1, StopAtUnrated: false, RecordPositions: true)));
             return tasks;
         }), 700),
-        new(new NewReleasesJob(10, stopAtKnown: false), 20),
         new(new FeaturedJob(10), 11),
-        new(new GameDetailsJob(s.DeepDetails), s.DeepDetails),
+        new(new GameDetailsJob(Math.Max(s.DeepDetails, 8_000)), Math.Max(s.DeepDetails, 8_000)),
         new(new DevelopersJob(s.DeepProfiles), s.DeepProfiles),
         new(new JamsJob(DeepJams, s.JamEntriesPerRun * 3), 21 + s.JamEntriesPerRun * 6),
     ];
@@ -154,6 +155,9 @@ public static class CrawlPlanner
         tasks.Add(Seg("nsfw"));
         return tasks;
     }
+
+    /// <summary>0 and the old default of 6000 mean "walk the lists until they are done", not a short cap.</summary>
+    public static int CatalogBudget(AppSettingsModel s) => s.DeepListPages is 0 or 6000 ? 500_000 : s.DeepListPages;
 
     private static readonly List<string> ExcludedTagSlugs = [.. ItchCatalog.NsfwTags, .. ItchCatalog.Genres.Select(g => g.Slug)];
 

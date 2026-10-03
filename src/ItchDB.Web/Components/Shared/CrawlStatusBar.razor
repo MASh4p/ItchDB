@@ -4,14 +4,18 @@
 @inject CoverageReport Coverage
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject BrowserFetcher Browser
 
 <div class="d-flex align-center gap-1 mr-3">
     @if (Net.IsPaused && Net.PausedUntil is { } until)
     {
-        <MudTooltip Text="itch.io показал проверку Cloudflare. Сбор ждёт и продолжит сам. Ускорить можно, импортировав cookie cf_clearance на странице «Сбор данных».">
+        <MudTooltip Text="itch.io не пускает запросы (проверка или код 400). Откройте окно браузера и пройдите проверку на itch.io. Новый запуск снимает паузу.">
             <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.HourglassTop" OnClick="GoData">
                 Cloudflare: пауза @Fmt.Countdown(until)
             </MudChip>
+        </MudTooltip>
+        <MudTooltip Text="Открыть окно браузера и перейти на itch.io">
+            <MudIconButton Icon="@Icons.Material.Filled.OpenInBrowser" Size="Size.Small" OnClick="OpenBrowserAsync" />
         </MudTooltip>
     }
     else if (Net.Notice is { } notice)
@@ -61,6 +65,9 @@
         {
             <MudTooltip Text="Продолжить">
                 <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" OnClick="Crawl.Resume" />
+            </MudTooltip>
+            <MudTooltip Text="Открыть окно браузера и перейти на itch.io">
+                <MudIconButton Icon="@Icons.Material.Filled.OpenInBrowser" Size="Size.Small" OnClick="OpenBrowserAsync" />
             </MudTooltip>
         }
         @if (Crawl.State != CrawlState.Stopping)
@@ -125,6 +132,20 @@
     }
 
     private void GoData() => Nav.NavigateTo("/data");
+
+    private async Task OpenBrowserAsync()
+    {
+        try
+        {
+            var opened = await Browser.OpenForUserAsync(CancellationToken.None);
+            if (!opened)
+                Snackbar.Add("Chrome и Edge не найдены. Откройте itch.io в своём браузере и пройдите проверку там.", Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Не удалось открыть окно браузера: " + ex.Message, Severity.Warning);
+        }
+    }
 
     private bool _wasBusy;
 

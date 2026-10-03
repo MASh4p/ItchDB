@@ -6,42 +6,53 @@ namespace ItchDB.Infrastructure.Http;
 /// <summary>Serializes requests to itch.io and keeps a minimum interval with random jitter between them.</summary>
 public sealed class RequestThrottle(SettingsService settings)
 {
-    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly SemaphoreSlim _serial = new(1, 1);
+    private readonly SemaphoreSlim _parallel = new(4, 4);
+    private readonly object _pace = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private TimeSpan _nextAllowed = TimeSpan.Zero;
+    private bool _fast;
+
+    /// <summary>
+    /// A live browser session already passed Cloudflare. List and game pages then start about five times a second,
+    /// up to four at once. The plain HTTP client stays one-at-a-time at the configured interval.
+    /// </summary>
+    public void PreferFast(bool fast) => _fast = fast;
 
     public async Task<IDisposable> AcquireAsync(CancellationToken ct)
     {
-        await _lock.WaitAsync(ct);
+        var slots = _fast ? _parallel : _serial;
+        await slots.WaitAsync(ct);
         try
         {
-            var wait = _nextAllowed - _clock.Elapsed;
+            TimeSpan wait;
+            lock (_pace)
+            {
+                wait = _nextAllowed - _clock.Elapsed;
+                if (wait < TimeSpan.Zero) wait = TimeSpan.Zero;
+                var s = settings.Current;
+                var interval = _fast ? 200 : Math.Max(250, s.RequestIntervalMs);
+                var jitterCap = _fast ? 80 : s.RequestJitterMs;
+                var jitter = jitterCap > 0 ? Random.Shared.Next(0, jitterCap + 1) : 0;
+                _nextAllowed = _clock.Elapsed + wait + TimeSpan.FromMilliseconds(interval + jitter);
+            }
             if (wait > TimeSpan.Zero) await Task.Delay(wait, ct);
         }
         catch
         {
-            _lock.Release();
+            slots.Release();
             throw;
         }
-        return new Releaser(this);
+        return new Releaser(slots);
     }
 
-    private void Release()
-    {
-        var s = settings.Current;
-        var interval = Math.Max(250, s.RequestIntervalMs);
-        var jitter = s.RequestJitterMs > 0 ? Random.Shared.Next(0, s.RequestJitterMs + 1) : 0;
-        _nextAllowed = _clock.Elapsed + TimeSpan.FromMilliseconds(interval + jitter);
-        _lock.Release();
-    }
-
-    private sealed class Releaser(RequestThrottle owner) : IDisposable
+    private sealed class Releaser(SemaphoreSlim slots) : IDisposable
     {
         private int _released;
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _released, 1) == 0) owner.Release();
+            if (Interlocked.Exchange(ref _released, 1) == 0) slots.Release();
         }
     }
 }

@@ -18,6 +18,7 @@ public sealed class CrawlCoordinator
     private readonly SettingsService _settings;
     private readonly CatalogIngestor _ingest;
     private readonly CursorStore _cursors;
+    private readonly NetworkStatus _net;
     private readonly ILogger<CrawlCoordinator> _logger;
     private readonly Lock _gate = new();
     private readonly LinkedList<CrawlLogEntry> _log = new();
@@ -32,6 +33,7 @@ public sealed class CrawlCoordinator
         SettingsService settings,
         CatalogIngestor ingest,
         CursorStore cursors,
+        NetworkStatus net,
         IHostApplicationLifetime lifetime,
         ILogger<CrawlCoordinator> logger)
     {
@@ -40,6 +42,7 @@ public sealed class CrawlCoordinator
         _settings = settings;
         _ingest = ingest;
         _cursors = cursors;
+        _net = net;
         _logger = logger;
         lifetime.ApplicationStopping.Register(Stop);
     }
@@ -94,6 +97,7 @@ public sealed class CrawlCoordinator
             _resume = CompletedSource();
             _cts = cts = new CancellationTokenSource();
         }
+        _net.SkipPause();
         Log(LogLevel.Information, $"Старт: {CrawlProfiles.Name(profile)} ({trigger})");
         _ = Task.Run(() => RunAsync(profile, cts.Token));
         Notify(force: true);
@@ -183,42 +187,63 @@ public sealed class CrawlCoordinator
             var http = scope.ServiceProvider.GetRequiredService<ItchHttpClient>();
             var settings = _settings.Clone();
             var plan = CrawlPlanner.Build(profile, settings);
-            JobCount = plan.Count;
+            var details = plan.Where(p => p.Job is GameDetailsJob).ToList();
+            var main = plan.Where(p => p.Job is not GameDetailsJob).ToList();
+            JobCount = main.Count;
             var ctx = new CrawlContext(this, profile, http, _ingest, _cursors, _db, settings, plan.Sum(p => p.Budget), ct);
             _ctx = ctx;
 
-            foreach (var planned in plan)
+            var detailBudget = details.Sum(p => p.Budget);
+            using var pagesCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var pages = detailBudget > 0
+                ? Task.Run(() => RunGamePagesAsync(ctx, detailBudget, pagesCts.Token), pagesCts.Token)
+                : Task.CompletedTask;
+            try
             {
-                ct.ThrowIfCancellationRequested();
-                await WaitIfPausedAsync(ct);
-                JobIndex++;
-                CurrentJob = planned.Job.Title;
-                StepText = null;
-                StepDone = StepTotal = 0;
-                Log(LogLevel.Information, $"▶ {planned.Job.Title}");
-                using (ctx.LimitBudget(planned.Budget))
+                foreach (var planned in main)
                 {
-                    try
+                    ct.ThrowIfCancellationRequested();
+                    await WaitIfPausedAsync(ct);
+                    JobIndex++;
+                    CurrentJob = planned.Job.Title;
+                    StepText = null;
+                    StepDone = StepTotal = 0;
+                    Log(LogLevel.Information, $"▶ {planned.Job.Title}");
+                    using (ctx.LimitBudget(planned.Budget))
                     {
-                        await planned.Job.RunAsync(ctx);
+                        try
+                        {
+                            await planned.Job.RunAsync(ctx);
+                        }
+                        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                        {
+                            throw;
+                        }
+                        catch (CloudflareBlockedException)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            ctx.Error($"{planned.Job.Title}: {ex.Message}");
+                            _logger.LogError(ex, "Crawl job {Job} failed", planned.Job.Title);
+                        }
                     }
-                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-                    catch (CloudflareBlockedException)
-                    {
-                        throw;
-                    }
-                    catch (Exception ex)
-                    {
-                        ctx.Error($"{planned.Job.Title}: {ex.Message}");
-                        _logger.LogError(ex, "Crawl job {Job} failed", planned.Job.Title);
-                    }
+                    await UpdateRunAsync(runId, CrawlRunStatus.Running, Trigger, CancellationToken.None);
                 }
-                await UpdateRunAsync(runId, CrawlRunStatus.Running, Trigger, CancellationToken.None);
+                message = $"Запросов {ctx.RequestsUsed}, игр обновлено {ctx.GamesUpserted}, ошибок {ctx.Errors}";
             }
-            message = $"Запросов {ctx.RequestsUsed}, игр обновлено {ctx.GamesUpserted}, ошибок {ctx.Errors}";
+            finally
+            {
+                await pagesCts.CancelAsync();
+                try
+                {
+                    await pages;
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -266,6 +291,24 @@ public sealed class CrawlCoordinator
         catch (Exception ex)
         {
             _logger.LogError(ex, "RunFinished handler failed");
+        }
+    }
+
+    private async Task RunGamePagesAsync(CrawlContext ctx, int budget, CancellationToken ct)
+    {
+        Log(LogLevel.Information,
+            $"Страницы игр идут в фоне, по одной примерно раз в {GameDetailsJob.GapSeconds} с, пока собираются списки и теги.");
+        var branch = ctx.Branch(budget, ct);
+        try
+        {
+            await new GameDetailsJob(budget).RunAsync(branch);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Log(LogLevel.Warning, "Фоновый сбор страниц игр остановлен: " + ex.Message);
         }
     }
 

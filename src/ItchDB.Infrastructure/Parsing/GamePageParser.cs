@@ -49,7 +49,8 @@ public static partial class GamePageParser
             if (m.Success) return long.Parse(m.Groups[1].Value);
         }
         var g = InitGameIdRegex().Match(html);
-        return g.Success ? long.Parse(g.Groups[1].Value) : null;
+        if (g.Success) return long.Parse(g.Groups[1].Value);
+        return ParseHelpers.ParseLong(doc.QuerySelector("input[name='game_id']")?.GetAttribute("value"));
     }
 
     private static void ParseInfoTable(IHtmlDocument doc, GamePageData data)
@@ -260,7 +261,11 @@ public static partial class GamePageParser
     [GeneratedRegex(@"games/(\d+)")]
     private static partial Regex PathIdRegex();
 
-    [GeneratedRegex(@"init_View(?:Html)?Game\([^{]*\{.*?""game"":\{[^}]*?""id"":(\d+)")]
+    /// <summary>
+    /// The game object is not the first JSON value, and hit_url can contain a raw '}' (a signed token),
+    /// so the id is the first "id" field inside the init call rather than "the next braces".
+    /// </summary>
+    [GeneratedRegex(@"init_View(?:Html)?Game\([\s\S]{0,8000}?""id""\s*:\s*(\d+)")]
     private static partial Regex InitGameIdRegex();
 
     [GeneratedRegex(@"""min_price"":(\d+)")]

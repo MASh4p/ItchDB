@@ -73,6 +73,36 @@ public class GamePageParserTests
     }
 
     [Fact]
+    public void IdFromAgeGateWhenInitTokenContainsABrace()
+    {
+        var html = """
+            <html><head></head><body>
+            <h1 class="game_title">Academy</h1>
+            <form action="https://itch.io/content-warning" method="POST">
+              <input value="446379" type="hidden" name="game_id"/>
+            </form>
+            <script>init_ViewGame('#view_game_1', {"game":{"hit_url":"https://author.itch.io/game/rh/token}tail","type":1,"id":446379}});</script>
+            </body></html>
+            """;
+
+        Assert.Equal(446379, GamePageParser.Parse(html).Id);
+    }
+
+    [Fact]
+    public void IdFromAgeGateInputAlone()
+    {
+        var html = """
+            <html><body>
+            <form action="https://itch.io/content-warning">
+              <input type="hidden" name="game_id" value="3792001"/>
+            </form>
+            </body></html>
+            """;
+
+        Assert.Equal(3792001, GamePageParser.Parse(html).Id);
+    }
+
+    [Fact]
     public void FreshReleaseWithAiDisclosure()
     {
         var g = GamePageParser.Parse(Fixture.Read("game_new_release.html"));
