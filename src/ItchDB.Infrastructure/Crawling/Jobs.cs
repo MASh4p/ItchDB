@@ -135,9 +135,6 @@ public sealed class FeaturedJob(int pages) : ICrawlJob
 /// <summary>Fetches game pages in priority order: tracked, fresh releases, most rated without details, stale.</summary>
 public sealed class GameDetailsJob(int limit) : ICrawlJob
 {
-    /// <summary>One game page at a time, well apart from the next, so a burst does not earn HTTP 400.</summary>
-    public const int GapSeconds = 12;
-
     public string Title => "Страницы игр (теги, даты, движок, комментарии)";
 
     public async Task RunAsync(CrawlContext ctx)
@@ -150,11 +147,9 @@ public sealed class GameDetailsJob(int limit) : ICrawlJob
             {
                 var item = queue[i];
                 ctx.Step($"Игра {i + 1} из {queue.Count}: {item.Url}", i + 1, queue.Count);
-                var fetched = await ctx.FetchAsync(item.Url);
+                var fetched = await ctx.FetchAsync(item.Url, gamePage: true);
                 if (await SaveOneAsync(ctx, item.Id, item.Url, fetched)) ok++;
                 else failed++;
-                if (i + 1 < queue.Count && ctx.HasBudget)
-                    await Task.Delay(TimeSpan.FromSeconds(GapSeconds), ctx.Ct);
             }
         }
         finally

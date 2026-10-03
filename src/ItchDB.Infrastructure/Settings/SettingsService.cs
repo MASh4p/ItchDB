@@ -88,7 +88,11 @@ public sealed class SettingsService(IDbContextFactory<ItchDbContext> dbFactory, 
     {
         try
         {
-            return JsonSerializer.Deserialize<AppSettingsModel>(json, Json) ?? new AppSettingsModel();
+            var model = JsonSerializer.Deserialize<AppSettingsModel>(json, Json) ?? new AppSettingsModel();
+            if (model.GamePageIntervalMs <= 0) model.GamePageIntervalMs = 12_000;
+            if (model.ParallelRequests <= 0) model.ParallelRequests = 4;
+            if (model.ParallelRequests > 8) model.ParallelRequests = 8;
+            return model;
         }
         catch (JsonException)
         {

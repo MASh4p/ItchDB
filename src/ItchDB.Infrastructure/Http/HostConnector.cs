@@ -45,4 +45,12 @@ internal static class HostConnector
             if (e is SocketException { SocketErrorCode: SocketError.ConnectionRefused }) return true;
         return false;
     }
+
+    /// <summary>The host never answered. Retrying it stalls every other request that is waiting on the same client.</summary>
+    public static bool IsConnectFailure(Exception? ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+            if (e is TimeoutException or SocketException) return true;
+        return false;
+    }
 }

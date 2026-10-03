@@ -9,9 +9,9 @@
 <div class="d-flex align-center gap-1 mr-3">
     @if (Net.IsPaused && Net.PausedUntil is { } until)
     {
-        <MudTooltip Text="itch.io не пускает запросы (проверка или код 400). Откройте окно браузера и пройдите проверку на itch.io. Новый запуск снимает паузу.">
+        <MudTooltip Text="@(Net.Notice ?? (Net.ConsecutiveChallenges > 0 ? "itch.io показывает проверку. Откройте окно браузера и пройдите её. Новый запуск снимает паузу." : "Короткая пауза, сбор продолжится сам."))">
             <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.HourglassTop" OnClick="GoData">
-                Cloudflare: пауза @Fmt.Countdown(until)
+                @(Net.ConsecutiveChallenges > 0 ? "Cloudflare: пауза" : "Пауза") @Fmt.Countdown(until)
             </MudChip>
         </MudTooltip>
         <MudTooltip Text="Открыть окно браузера и перейти на itch.io">

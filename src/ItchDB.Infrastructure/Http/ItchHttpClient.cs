@@ -28,16 +28,20 @@ public sealed class ItchHttpClient(
     BrowserFetcher? browser = null)
 {
     private const string DefaultAccept = "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8";
+    private static readonly TimeSpan Http400Pause = TimeSpan.FromSeconds(5);
+    private const int Http400ResetAfter = 5;
+    private static readonly TimeSpan ConnectionPause = TimeSpan.FromSeconds(5);
+    private const int ConnectionSlowAfter = 5;
     private const string BlockedMessage =
         "Cloudflare продолжает показывать проверку. Откройте itch.io в браузере, пройдите проверку и импортируйте cookie cf_clearance на странице «Сбор данных».";
 
     /// <summary>For background collection: sits out Cloudflare pauses and retries after each one.</summary>
-    public async Task<FetchResult> GetAsync(string url, CancellationToken ct, string accept = DefaultAccept)
+    public async Task<FetchResult> GetAsync(string url, CancellationToken ct, string accept = DefaultAccept, bool gamePage = false)
     {
         while (true)
         {
             await status.WaitWhilePausedAsync(ct);
-            var (result, challenge) = await SendThrottledAsync(url, accept, ct);
+            var (result, challenge) = await SendThrottledAsync(url, accept, ct, gamePage);
             if (!challenge) return result;
             if (OnChallenge(url) is null) throw new CloudflareBlockedException(BlockedMessage);
             await status.WaitWhilePausedAsync(ct);
@@ -61,12 +65,22 @@ public sealed class ItchHttpClient(
             "itch.io показал проверку Cloudflare на этой странице. Если сбор тоже встанет, импортируйте cookie cf_clearance на странице «Сбор данных».");
     }
 
-    private async Task<(FetchResult Result, bool Challenge)> SendThrottledAsync(string url, string accept, CancellationToken ct)
+    private async Task<(FetchResult Result, bool Challenge)> SendThrottledAsync(string url, string accept, CancellationToken ct, bool gamePage = false)
     {
         (FetchResult Result, bool Challenge) r;
-        using (await throttle.AcquireAsync(ct))
+        using (await throttle.AcquireAsync(ct, gamePage))
         {
             r = await SendAsync(url, accept, ct);
+        }
+        if (r.Result.StatusCode == 0)
+        {
+            HandleConnectionFailure(url);
+            return r;
+        }
+        if (r.Result.StatusCode == 400 && !IsChallengeBody(r.Result.Body))
+        {
+            await HandleHttp400Async(url, ct);
+            return r;
         }
         if (!r.Challenge)
         {
@@ -77,15 +91,62 @@ public sealed class ItchHttpClient(
         return r;
     }
 
-    /// <summary>Escalates the shared pause; returns null once the configured pauses are exhausted.</summary>
-    /// <summary>Null means the pauses are exhausted. Zero means another request already started the current pause.</summary>
+    /// <summary>A bare 400 is a burned browser session, not a captcha. Wait briefly; after five in a row, start a clean window.</summary>
+    private async Task HandleHttp400Async(string url, CancellationToken ct)
+    {
+        var (count, reset) = status.NoteHttp400(Http400ResetAfter);
+        if (reset)
+        {
+            log.LogWarning("HTTP 400 for {Url} happened {Count} times in a row; resetting the browser session", url, count);
+            status.SetNotice("Код 400 повторился больше 5 раз подряд. Сеанс браузера сброшен, следующий запрос откроет чистое окно.");
+            if (browser is not null)
+            {
+                try
+                {
+                    await browser.ResetSessionAsync(ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    log.LogWarning(ex, "Browser session reset after HTTP 400 failed");
+                }
+            }
+        }
+        else
+        {
+            log.LogWarning("HTTP 400 for {Url}; pausing {Seconds:0}s ({Count} in a row)", url, Http400Pause.TotalSeconds, count);
+            status.SetNotice($"Код 400. Пауза {Http400Pause.TotalSeconds:0} с ({count} подряд). После пяти подряд сеанс браузера сбросится сам.");
+        }
+        status.TryBeginPause(Http400Pause);
+    }
+
+    /// <summary>
+    /// A dead game host is not a Cloudflare check. Skip it. Only a long streak earns a few seconds of pause,
+    /// so one unreachable page cannot stop the rest of the crawl.
+    /// </summary>
+    private void HandleConnectionFailure(string url)
+    {
+        var (count, slow) = status.NoteConnectionFailure(ConnectionSlowAfter);
+        if (!slow)
+        {
+            log.LogWarning("No response from {Url} ({Count} in a row); continuing", url, count);
+            return;
+        }
+        log.LogWarning("No response from {Url} ({Count} in a row); pausing {Seconds:0}s", url, count, ConnectionPause.TotalSeconds);
+        status.SetNotice($"Нет ответа уже {count} раз подряд. Пауза {ConnectionPause.TotalSeconds:0} с, затем сбор продолжится. Это не проверка Cloudflare.");
+        status.TryBeginPause(ConnectionPause);
+    }
+
+    /// <summary>
+    /// Escalates the shared pause. Null means the pauses are exhausted.
+    /// Zero means another request already started the current pause.
+    /// </summary>
     private TimeSpan? OnChallenge(string url)
     {
         var pauses = settings.Current.CloudflarePauseMinutes is { Length: > 0 } p ? p : [10, 20, 40];
         var n = status.StartPause(pauses);
         if (n is null or 0) return n is null ? null : TimeSpan.Zero;
         var pause = TimeSpan.FromMinutes(pauses[n.Value - 1]);
-        log.LogWarning("itch.io blocked {Url} (check or HTTP 400); pausing for {Minutes} min (attempt {N})", url, pause.TotalMinutes, n);
+        log.LogWarning("itch.io blocked {Url}; pausing for {Minutes} min (attempt {N})", url, pause.TotalMinutes, n);
         return pause;
     }
 
@@ -96,10 +157,10 @@ public sealed class ItchHttpClient(
             var page = await browser.TryGetAsync(url, ct);
             if (page is not null)
             {
-                var challenge = IsBlocked(page.Status, page.Body);
+                var challenge = IsCaptcha(page.Status, page.Body);
                 throttle.PreferFast(!challenge);
                 if (challenge) status.SetNotice(BrowserFetcher.BlockNotice);
-                status.RecordRequest(url, page.Status, challenge || page.Status >= 400 && page.Status != 404);
+                status.RecordRequest(url, page.Status, challenge || page.Status == 0 || page.Status >= 400 && page.Status != 404);
                 return (new FetchResult(page.Status, challenge ? "" : page.Body, page.FinalUrl), challenge);
             }
             throttle.PreferFast(false);
@@ -118,7 +179,7 @@ public sealed class ItchHttpClient(
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
             var code = (int)response.StatusCode;
-            var challenge = IsChallenge(response, body) || code is 400 or 429;
+            var challenge = IsChallenge(response, body) || code == 429;
             if (challenge) status.SetNotice(BrowserFetcher.BlockNotice);
             status.RecordRequest(url, code, challenge || code >= 400 && code != 404);
             return (new FetchResult(code, challenge ? "" : body, response.RequestMessage?.RequestUri?.ToString() ?? url), challenge);
@@ -150,6 +211,9 @@ public sealed class ItchHttpClient(
 
     /// <summary>A captcha page, or the 400/429 streak itch.io returns once it stops accepting the client.</summary>
     public static bool IsBlocked(int status, string body) => IsChallengeBody(body) || status is 400 or 429;
+
+    /// <summary>A check the user can solve. A bare HTTP 400 is handled separately: a short pause, then a session reset.</summary>
+    private static bool IsCaptcha(int status, string body) => IsChallengeBody(body) || status == 429;
 
     public static bool IsChallengeBody(string body) =>
         body.Contains("<title>Just a moment...</title>", StringComparison.OrdinalIgnoreCase)

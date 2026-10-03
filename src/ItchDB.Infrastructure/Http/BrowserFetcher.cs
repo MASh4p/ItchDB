@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ItchDB.Infrastructure.Data;
+using ItchDB.Infrastructure.Settings;
 using Microsoft.Extensions.Logging;
 
 namespace ItchDB.Infrastructure.Http;
@@ -16,7 +17,7 @@ public sealed record BrowserPage(int Status, string Body, string FinalUrl);
 /// Loads itch.io pages through a real Chrome or Edge window. Cloudflare ties its check to the browser,
 /// so a cookie copied into the app's own HTTP client is rejected; the same check passes in Chrome itself.
 /// </summary>
-public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, NetworkStatus status, ILogger<BrowserFetcher> log) : IDisposable
+public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, NetworkStatus status, SettingsService settings, ILogger<BrowserFetcher> log) : IDisposable
 {
     public const string SolveNotice =
         "В окне Chrome проверка Cloudflare. Если она не исчезла сама, пройдите её там — сбор продолжится и пауза не понадобится.";
@@ -28,15 +29,17 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
     private static readonly TimeSpan PageTimeout = TimeSpan.FromSeconds(45);
     private static readonly TimeSpan SolveTimeout = TimeSpan.FromMinutes(3);
 
-    private const int TabCount = 4;
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly SemaphoreSlim _fetchSlots = new(TabCount, TabCount);
+    private SemaphoreSlim _fetchSlots = new(1, 1);
+    private int _slotCount = 1;
     private readonly System.Threading.Channels.Channel<CdpSession> _navTabs =
         System.Threading.Channels.Channel.CreateUnbounded<CdpSession>();
     private readonly string _profile = Path.Combine(paths.Root, "browser-profile");
     private readonly string _pidFile = Path.Combine(paths.Root, "browser.pid");
     private Process? _process;
     private CdpSession? _session;
+    private CdpSession? _window;
+    private string? _windowTargetId;
     private int _navCount;
     private string? _browserName;
     private bool _announced;
@@ -50,6 +53,7 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         await _gate.WaitAsync(ct);
         try
         {
+            await SetWindowAsync(show: true, ct);
             await _session!.CommandAsync("Page.bringToFront", new { }, ct);
             await LoadAsync(_session, "https://itch.io/", ct);
             return true;
@@ -84,19 +88,43 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
                 // shows a white page with nothing to click, and itch.io stays unusable.
                 var fetchedBlock = page is not null && page.Status is 400 or 429;
                 if (!fetchedBlock && (page is null || ItchHttpClient.IsBlocked(page.Status, page.Body)))
-                    page = await LoadAsync(tab, url, ct);
+                {
+                    try
+                    {
+                        page = await LoadAsync(tab, url, ct);
+                    }
+                    catch (IOException ex)
+                    {
+                        log.LogWarning("No response from {Url}: {Message}", url, ex.Message);
+                        return new BrowserPage(0, "", url);
+                    }
+                }
                 var loaded = page ?? throw new IOException("Страница не загрузилась");
                 if (ItchHttpClient.IsChallengeBody(loaded.Body))
                 {
                     status.SetNotice(SolveNotice);
                     log.LogWarning("Cloudflare check in the Chrome window for {Url}. Waiting up to {Minutes} min for it to be solved", url, SolveTimeout.TotalMinutes);
+                    await SetWindowAsync(show: true, ct);
+                    try
+                    {
+                        await tab.CommandAsync("Page.bringToFront", new { }, ct);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+                    {
+                        log.LogDebug(ex, "Could not bring the check tab forward");
+                    }
                     var solved = await WaitForSolutionAsync(tab, ct);
                     status.SetNotice(null);
-                    if (solved is not null) page = solved;
+                    if (solved is not null)
+                    {
+                        page = solved;
+                        await SetWindowAsync(show: false, ct);
+                    }
                 }
                 else if (page.Status is 400 or 429)
                 {
-                    status.SetNotice(BlockNotice);
+                    // A bare 400 gets a short pause in ItchHttpClient. 429 is still a check the user can wait out.
+                    if (page.Status == 429) status.SetNotice(BlockNotice);
                     if (!fetchedBlock) await LeaveErrorPageAsync(tab, ct);
                 }
                 return page;
@@ -161,6 +189,10 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         psi.ArgumentList.Add("--no-first-run");
         psi.ArgumentList.Add("--no-default-browser-check");
         psi.ArgumentList.Add("--disable-sync");
+        psi.ArgumentList.Add("--start-minimized");
+        psi.ArgumentList.Add("--disable-background-timer-throttling");
+        psi.ArgumentList.Add("--disable-backgrounding-occluded-windows");
+        psi.ArgumentList.Add("--disable-renderer-backgrounding");
         psi.ArgumentList.Add("--window-size=1100,800");
         psi.ArgumentList.Add("about:blank");
         _process = Process.Start(psi) ?? throw new IOException($"Не удалось запустить {_browserName}");
@@ -168,7 +200,10 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
 
         var ws = await WaitForPageSocketAsync(port, ct);
         _session = await ConnectTabAsync(ws, ct);
-        _navCount = await OpenNavTabsAsync(port, ct);
+        var tabs = Math.Clamp(settings.Current.ParallelRequests, 1, 8);
+        EnsureSlots(tabs);
+        _navCount = await OpenNavTabsAsync(port, tabs, ct);
+        await AttachWindowAsync(port, ct);
         if (!_announced)
         {
             _announced = true;
@@ -177,11 +212,11 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         return true;
     }
 
-    private async Task<int> OpenNavTabsAsync(int port, CancellationToken ct)
+    private async Task<int> OpenNavTabsAsync(int port, int tabs, CancellationToken ct)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
         var opened = 0;
-        for (var i = 1; i < TabCount; i++)
+        for (var i = 0; i < tabs; i++)
         {
             try
             {
@@ -319,17 +354,36 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         var deadline = DateTime.UtcNow + timeout;
         DocumentHit? hit = null;
         var loaded = false;
+        string? mainRequest = null;
         while (DateTime.UtcNow < deadline)
         {
             var ev = await session.NextEventAsync(deadline - DateTime.UtcNow, ct);
             if (ev is null) break;
-            if (ev.Value.Method == "Network.responseReceived" && DocumentOf(ev.Value.Params, frameId) is { } doc)
+            if (ev.Value.Method == "Network.requestWillBeSent" && MainDocumentRequest(ev.Value.Params, frameId) is { } requestId)
+                mainRequest = requestId;
+            else if (ev.Value.Method == "Network.responseReceived" && DocumentOf(ev.Value.Params, frameId) is { } doc)
                 hit = doc;
+            else if (ev.Value.Method == "Network.loadingFailed" && IsMainDocumentFailure(ev.Value.Params, mainRequest))
+                throw new IOException(ev.Value.Params["errorText"]?.GetValue<string>() ?? "соединение оборвалось");
             else if (ev.Value.Method == "Page.loadEventFired")
                 loaded = true;
             if (hit is not null && loaded && hit.Status is < 300 or >= 400) return hit;
         }
         return requireLoad ? null : hit;
+    }
+
+    private static string? MainDocumentRequest(JsonNode p, string? frameId)
+    {
+        if (p["type"]?.GetValue<string>() != "Document") return null;
+        if (frameId is not null && p["frameId"]?.GetValue<string>() is { } eventFrame && eventFrame != frameId)
+            return null;
+        return p["requestId"]?.GetValue<string>();
+    }
+
+    private static bool IsMainDocumentFailure(JsonNode p, string? mainRequest)
+    {
+        if (mainRequest is null) return false;
+        return p["requestId"]?.GetValue<string>() == mainRequest;
     }
 
     private static async Task<string?> MainFrameIdAsync(CdpSession session, CancellationToken ct)
@@ -393,7 +447,7 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         return result["result"]?["value"]?.GetValue<string>();
     }
 
-    private static async Task<string> WaitForPageSocketAsync(int port, CancellationToken ct)
+    private async Task<string> WaitForPageSocketAsync(int port, CancellationToken ct)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
         var deadline = DateTime.UtcNow.AddSeconds(20);
@@ -405,7 +459,11 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
                 var json = await http.GetStringAsync($"http://127.0.0.1:{port}/json/list", ct);
                 var page = JsonNode.Parse(json)!.AsArray().FirstOrDefault(n => n?["type"]?.GetValue<string>() == "page");
                 var socket = page?["webSocketDebuggerUrl"]?.GetValue<string>();
-                if (!string.IsNullOrEmpty(socket)) return socket;
+                if (!string.IsNullOrEmpty(socket))
+                {
+                    _windowTargetId = page?["id"]?.GetValue<string>();
+                    return socket;
+                }
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
             {
@@ -461,6 +519,9 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
     {
         _session?.Dispose();
         _session = null;
+        _window?.Dispose();
+        _window = null;
+        _windowTargetId = null;
         _navCount = 0;
         while (_navTabs.Reader.TryRead(out var tab)) tab.Dispose();
         try
@@ -503,6 +564,50 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         finally
         {
             _gate.Release();
+        }
+    }
+
+    private void EnsureSlots(int tabs)
+    {
+        if (_slotCount == tabs) return;
+        _fetchSlots = new SemaphoreSlim(tabs, tabs);
+        _slotCount = tabs;
+    }
+
+    private async Task AttachWindowAsync(int port, CancellationToken ct)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            var json = await http.GetStringAsync($"http://127.0.0.1:{port}/json/version", ct);
+            var socket = JsonNode.Parse(json)?["webSocketDebuggerUrl"]?.GetValue<string>();
+            if (string.IsNullOrEmpty(socket)) return;
+            _window = await CdpSession.ConnectAsync(socket, ct);
+            await SetWindowAsync(show: false, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            log.LogDebug(ex, "Browser window control is unavailable");
+        }
+    }
+
+    /// <summary>The crawl window stays minimized. It is restored only when a check has to be solved, or when the user asks.</summary>
+    private async Task SetWindowAsync(bool show, CancellationToken ct)
+    {
+        if (_window is not { IsOpen: true } || string.IsNullOrEmpty(_windowTargetId)) return;
+        try
+        {
+            var win = await _window.CommandAsync("Browser.getWindowForTarget", new { targetId = _windowTargetId }, ct);
+            var id = win["windowId"]?.GetValue<int>();
+            if (id is null) return;
+            object bounds = show
+                ? new { windowState = "normal", left = 80, top = 60, width = 1100, height = 800 }
+                : new { windowState = "minimized" };
+            await _window.CommandAsync("Browser.setWindowBounds", new { windowId = id.Value, bounds }, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            log.LogDebug(ex, "Could not change the browser window");
         }
     }
 

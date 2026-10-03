@@ -14,9 +14,10 @@
 
 <MudText Typo="Typo.h4" Class="mb-1">Сбор данных</MudText>
 <MudText Class="itch-muted mb-4" Style="max-width:1000px">
-    У itch.io нет открытого API каталога, поэтому ItchDB читает публичные страницы как обычный браузер — по одному запросу
-    раз в @Fmt.N(Settings.Current.RequestIntervalMs / 1000.0, 1)–@Fmt.N((Settings.Current.RequestIntervalMs + Settings.Current.RequestJitterMs) / 1000.0, 1) с.
-    Страницы отдельных игр при этом качаются в фоне, по одной примерно раз в @GameDetailsJob.GapSeconds с, одновременно со списками и тегами.
+    У itch.io нет открытого API каталога, поэтому ItchDB читает публичные страницы как обычный браузер.
+    Списки и теги — раз в @Fmt.N(Settings.Current.RequestIntervalMs / 1000.0, 1)–@Fmt.N((Settings.Current.RequestIntervalMs + Settings.Current.RequestJitterMs) / 1000.0, 1) с,
+    до @Math.Clamp(Settings.Current.ParallelRequests, 1, 8) одновременно.
+    Страницы отдельных игр качаются в фоне, по одной примерно раз в @Fmt.N(Settings.Current.GamePageIntervalMs / 1000.0, 0) с, одновременно со списками и тегами.
     Данные хранятся локально, каждый запуск продолжает с места остановки. Сбор идёт только пока приложение открыто.
 </MudText>
 
@@ -102,9 +103,17 @@
             @if (Net.IsPaused && Net.PausedUntil is { } until)
             {
                 <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">
-                    @(Net.Notice ?? $"itch.io не пускает запросы — проверка или код 400 ({Net.ConsecutiveChallenges}-й раз подряд).")
-                    Сбор продолжится через @Fmt.Countdown(until). Новый запуск снимает эту паузу.
-                    Белая страница с кодом 400 — это не капча: откройте браузер, на itch.io проверка, если она есть, проходит в том окне.
+                    @if (Net.ConsecutiveChallenges > 0)
+                    {
+                        @(Net.Notice ?? $"itch.io не пускает запросы — проверка ({Net.ConsecutiveChallenges}-й раз подряд).")
+                        <text> Сбор продолжится через @Fmt.Countdown(until). Новый запуск снимает эту паузу.
+                        Если в окне проверка, пройдите её там.</text>
+                    }
+                    else
+                    {
+                        @(Net.Notice ?? "Короткая пауза.")
+                        <text> Сбор продолжится через @Fmt.Countdown(until).</text>
+                    }
                     <div class="d-flex flex-wrap gap-2 mt-2">
                         <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.OpenInBrowser" OnClick="OpenBrowserAsync">Открыть браузер</MudButton>
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="Net.SkipPause">Продолжить сейчас</MudButton>
@@ -511,7 +520,8 @@
     private TimeSpan EstimateTime(int requests)
     {
         var s = Settings.Current;
-        var perRequest = (Math.Max(250, s.RequestIntervalMs) + s.RequestJitterMs / 2.0 + 350) / 1000.0;
+        var parallel = Math.Clamp(s.ParallelRequests, 1, 8);
+        var perRequest = (Math.Max(250, s.RequestIntervalMs) + s.RequestJitterMs / 2.0 + 350) / 1000.0 / parallel;
         return TimeSpan.FromSeconds(requests * perRequest);
     }
 

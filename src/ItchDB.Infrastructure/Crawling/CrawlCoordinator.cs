@@ -297,7 +297,7 @@ public sealed class CrawlCoordinator
     private async Task RunGamePagesAsync(CrawlContext ctx, int budget, CancellationToken ct)
     {
         Log(LogLevel.Information,
-            $"Страницы игр идут в фоне, по одной примерно раз в {GameDetailsJob.GapSeconds} с, пока собираются списки и теги.");
+            $"Страницы игр идут в фоне, по одной примерно раз в {Math.Max(250, ctx.Settings.GamePageIntervalMs) / 1000.0:0.#} с, пока собираются списки и теги.");
         var branch = ctx.Branch(budget, ct);
         try
         {

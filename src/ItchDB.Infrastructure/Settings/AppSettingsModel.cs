@@ -4,7 +4,12 @@ namespace ItchDB.Infrastructure.Settings;
 public sealed class AppSettingsModel
 {
     // Network
+    /// <summary>Gap between catalog requests: tags, lists and similar pages.</summary>
     public int RequestIntervalMs { get; set; } = 1300;
+    /// <summary>Gap between individual game pages. Slower than lists, so a burst does not earn HTTP 400.</summary>
+    public int GamePageIntervalMs { get; set; } = 12_000;
+    /// <summary>How many tag and list pages may be in flight together. Game pages stay one at a time.</summary>
+    public int ParallelRequests { get; set; } = 4;
     public int RequestJitterMs { get; set; } = 900;
     public string UserAgent { get; set; } =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";

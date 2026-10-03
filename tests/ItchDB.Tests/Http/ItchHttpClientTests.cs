@@ -70,6 +70,68 @@ public sealed class ItchHttpClientTests : IDisposable
     }
 
     [Fact]
+    public async Task Http400_PausesForAFewSeconds_WithoutTheCloudflareEscalation()
+    {
+        _handler.Status = HttpStatusCode.BadRequest;
+
+        var result = await _client.GetAsync(Url, CancellationToken.None);
+
+        Assert.Equal(400, result.StatusCode);
+        Assert.Equal(1, _handler.Calls);
+        Assert.True(_status.IsPaused);
+        Assert.Equal(0, _status.ConsecutiveChallenges);
+        Assert.Equal(1, _status.ConsecutiveHttp400);
+        Assert.True(_status.PausedUntil <= DateTime.UtcNow.AddSeconds(6));
+    }
+
+    [Fact]
+    public async Task ConnectionFailure_ContinuesWithoutAPause()
+    {
+        _handler.Fault = new HttpRequestException("Не удалось подключиться к nomnomnami.itch.io");
+
+        var result = await _client.GetAsync(Url, CancellationToken.None);
+
+        Assert.Equal(0, result.StatusCode);
+        Assert.False(_status.IsPaused);
+        Assert.Equal(0, _status.ConsecutiveChallenges);
+        Assert.Equal(1, _status.ConsecutiveConnectionFailures);
+    }
+
+    [Fact]
+    public void SixthConnectionFailure_PausesForAFewSeconds()
+    {
+        for (var i = 1; i <= 5; i++)
+        {
+            var step = _status.NoteConnectionFailure(5);
+            Assert.Equal(i, step.Count);
+            Assert.False(step.SlowDown);
+        }
+
+        var sixth = _status.NoteConnectionFailure(5);
+
+        Assert.Equal(6, sixth.Count);
+        Assert.True(sixth.SlowDown);
+        Assert.Equal(6, _status.ConsecutiveConnectionFailures);
+    }
+
+    [Fact]
+    public void SixthConsecutiveHttp400_AsksToResetTheSession()
+    {
+        for (var i = 1; i <= 5; i++)
+        {
+            var step = _status.NoteHttp400(5);
+            Assert.Equal(i, step.Count);
+            Assert.False(step.Reset);
+        }
+
+        var sixth = _status.NoteHttp400(5);
+
+        Assert.Equal(6, sixth.Count);
+        Assert.True(sixth.Reset);
+        Assert.Equal(0, _status.ConsecutiveHttp400);
+    }
+
+    [Fact]
     public async Task SuccessAfterSkippedPause_ResetsTheEscalation()
     {
         _handler.Challenge = true;
@@ -94,14 +156,17 @@ public sealed class ItchHttpClientTests : IDisposable
     private sealed class StubHandler : HttpMessageHandler
     {
         public bool Challenge { get; set; }
+        public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
+        public Exception? Fault { get; set; }
         public int Calls { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Calls++;
+            if (Fault is not null) throw Fault;
             var response = Challenge
                 ? new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent("<html><title>Just a moment...</title></html>") }
-                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("<html>ok</html>") };
+                : new HttpResponseMessage(Status) { Content = new StringContent(Status == HttpStatusCode.OK ? "<html>ok</html>" : "") };
             if (Challenge) response.Headers.TryAddWithoutValidation("cf-mitigated", "challenge");
             response.RequestMessage = request;
             return Task.FromResult(response);

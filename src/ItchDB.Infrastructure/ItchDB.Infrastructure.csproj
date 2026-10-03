@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ItchDB.Core\ItchDB.Core.csproj" />
+    <InternalsVisibleTo Include="ItchDB.Tests" />
   </ItemGroup>
 
   <ItemGroup>

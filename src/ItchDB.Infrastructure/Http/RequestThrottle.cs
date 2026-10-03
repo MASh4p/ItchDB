@@ -3,56 +3,158 @@ using ItchDB.Infrastructure.Settings;
 
 namespace ItchDB.Infrastructure.Http;
 
-/// <summary>Serializes requests to itch.io and keeps a minimum interval with random jitter between them.</summary>
+/// <summary>
+/// Spaces requests to itch.io. Lists and tags share one interval and can run several at a time
+/// while the browser session is healthy. Game pages use their own, slower interval and stay one at a time.
+/// The plain HTTP client stays one-at-a-time.
+/// </summary>
 public sealed class RequestThrottle(SettingsService settings)
 {
     private readonly SemaphoreSlim _serial = new(1, 1);
-    private readonly SemaphoreSlim _parallel = new(4, 4);
+    private readonly SemaphoreSlim _game = new(1, 1);
+    private readonly SlotGate _lists = new();
     private readonly object _pace = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
-    private TimeSpan _nextAllowed = TimeSpan.Zero;
+    private TimeSpan _nextList = TimeSpan.Zero;
+    private TimeSpan _nextGame = TimeSpan.Zero;
     private bool _fast;
 
-    /// <summary>
-    /// A live browser session already passed Cloudflare. List and game pages then start about five times a second,
-    /// up to four at once. The plain HTTP client stays one-at-a-time at the configured interval.
-    /// </summary>
+    /// <summary>A live browser session can run several list requests at once. The plain HTTP client cannot.</summary>
     public void PreferFast(bool fast) => _fast = fast;
 
-    public async Task<IDisposable> AcquireAsync(CancellationToken ct)
+    public async Task<IDisposable> AcquireAsync(CancellationToken ct, bool gamePage = false)
     {
-        var slots = _fast ? _parallel : _serial;
-        await slots.WaitAsync(ct);
+        var fast = _fast;
+        if (!fast)
+        {
+            await _serial.WaitAsync(ct);
+            try
+            {
+                await WaitTurnAsync(gamePage, ct);
+            }
+            catch
+            {
+                _serial.Release();
+                throw;
+            }
+            return new SerialReleaser(_serial);
+        }
+
+        if (gamePage)
+        {
+            await _game.WaitAsync(ct);
+            try
+            {
+                await WaitTurnAsync(gamePage: true, ct);
+            }
+            catch
+            {
+                _game.Release();
+                throw;
+            }
+            return new SerialReleaser(_game);
+        }
+
+        var limit = Math.Clamp(settings.Current.ParallelRequests, 1, 8);
+        var slot = await _lists.EnterAsync(limit, ct);
         try
         {
-            TimeSpan wait;
-            lock (_pace)
-            {
-                wait = _nextAllowed - _clock.Elapsed;
-                if (wait < TimeSpan.Zero) wait = TimeSpan.Zero;
-                var s = settings.Current;
-                var interval = _fast ? 200 : Math.Max(250, s.RequestIntervalMs);
-                var jitterCap = _fast ? 80 : s.RequestJitterMs;
-                var jitter = jitterCap > 0 ? Random.Shared.Next(0, jitterCap + 1) : 0;
-                _nextAllowed = _clock.Elapsed + wait + TimeSpan.FromMilliseconds(interval + jitter);
-            }
-            if (wait > TimeSpan.Zero) await Task.Delay(wait, ct);
+            await WaitTurnAsync(gamePage: false, ct);
         }
         catch
         {
-            slots.Release();
+            slot.Dispose();
             throw;
         }
-        return new Releaser(slots);
+        return slot;
     }
 
-    private sealed class Releaser(SemaphoreSlim slots) : IDisposable
+    private async Task WaitTurnAsync(bool gamePage, CancellationToken ct)
+    {
+        TimeSpan wait;
+        lock (_pace)
+        {
+            var s = settings.Current;
+            var next = gamePage ? _nextGame : _nextList;
+            wait = next - _clock.Elapsed;
+            if (wait < TimeSpan.Zero) wait = TimeSpan.Zero;
+            var interval = Math.Max(250, gamePage ? s.GamePageIntervalMs : s.RequestIntervalMs);
+            var jitterCap = s.RequestJitterMs;
+            var jitter = jitterCap > 0 ? Random.Shared.Next(0, jitterCap + 1) : 0;
+            var updated = _clock.Elapsed + wait + TimeSpan.FromMilliseconds(interval + jitter);
+            if (gamePage) _nextGame = updated;
+            else _nextList = updated;
+        }
+        if (wait > TimeSpan.Zero) await Task.Delay(wait, ct);
+    }
+
+    private sealed class SerialReleaser(SemaphoreSlim slots) : IDisposable
     {
         private int _released;
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _released, 1) == 0) slots.Release();
+        }
+    }
+
+    /// <summary>A concurrency limit that follows the current setting, including a change while a crawl is running.</summary>
+    private sealed class SlotGate
+    {
+        private readonly object _gate = new();
+        private readonly Queue<TaskCompletionSource<bool>> _waiting = new();
+        private int _used;
+
+        public async Task<IDisposable> EnterAsync(int limit, CancellationToken ct)
+        {
+            limit = Math.Max(1, limit);
+            TaskCompletionSource<bool>? pending = null;
+            lock (_gate)
+            {
+                if (_used < limit)
+                {
+                    _used++;
+                    return new Release(this);
+                }
+                pending = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _waiting.Enqueue(pending);
+            }
+
+            try
+            {
+                await pending.Task.WaitAsync(ct);
+            }
+            catch
+            {
+                if (pending.Task.IsCompletedSuccessfully) Exit();
+                else pending.TrySetCanceled(ct);
+                throw;
+            }
+            return new Release(this);
+        }
+
+        private void Exit()
+        {
+            lock (_gate)
+            {
+                while (_waiting.Count > 0)
+                {
+                    var next = _waiting.Dequeue();
+                    if (next.Task.IsCompleted) continue;
+                    if (next.TrySetResult(true)) return;
+                }
+                _used--;
+            }
+        }
+
+        private sealed class Release(SlotGate gate) : IDisposable
+        {
+            private int _once;
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _once, 1) == 0) gate.Exit();
+            }
         }
     }
 }

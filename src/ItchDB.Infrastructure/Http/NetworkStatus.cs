@@ -16,6 +16,8 @@ public sealed class NetworkStatus
 
     public DateTime? PausedUntil { get; private set; }
     public int ConsecutiveChallenges { get; private set; }
+    public int ConsecutiveHttp400 { get; private set; }
+    public int ConsecutiveConnectionFailures { get; private set; }
     public DateTime? LastChallengeAt { get; private set; }
     public bool IsBlocked { get; private set; }
 
@@ -46,10 +48,12 @@ public sealed class NetworkStatus
 
     internal void RecordSuccess()
     {
-        if (ConsecutiveChallenges == 0 && !IsBlocked) return;
+        if (ConsecutiveChallenges == 0 && ConsecutiveHttp400 == 0 && ConsecutiveConnectionFailures == 0 && !IsBlocked) return;
         lock (_gate)
         {
             ConsecutiveChallenges = 0;
+            ConsecutiveHttp400 = 0;
+            ConsecutiveConnectionFailures = 0;
             IsBlocked = false;
         }
         Changed?.Invoke();
@@ -95,6 +99,49 @@ public sealed class NetworkStatus
         return exhausted ? null : n;
     }
 
+    /// <summary>
+    /// Counts a bare HTTP 400. The streak resets after a success. When it passes <paramref name="resetAfter"/>,
+    /// the count returns to zero and <c>Reset</c> is true so only one caller resets the browser session.
+    /// </summary>
+    internal (int Count, bool Reset) NoteHttp400(int resetAfter)
+    {
+        lock (_gate)
+        {
+            ConsecutiveHttp400++;
+            if (ConsecutiveHttp400 <= resetAfter) return (ConsecutiveHttp400, false);
+            var seen = ConsecutiveHttp400;
+            ConsecutiveHttp400 = 0;
+            return (seen, true);
+        }
+    }
+
+    /// <summary>
+    /// Counts a host that did not answer. The streak resets after a success.
+    /// <c>SlowDown</c> becomes true once the streak passes <paramref name="slowAfter"/>, and stays true for further failures.
+    /// </summary>
+    internal (int Count, bool SlowDown) NoteConnectionFailure(int slowAfter)
+    {
+        lock (_gate)
+        {
+            ConsecutiveConnectionFailures++;
+            return (ConsecutiveConnectionFailures, ConsecutiveConnectionFailures > slowAfter);
+        }
+    }
+
+    /// <summary>Starts a short pause unless one is already running, so parallel 400s do not stack or shorten a longer pause.</summary>
+    internal bool TryBeginPause(TimeSpan duration)
+    {
+        lock (_gate)
+        {
+            if (PausedUntil is { } until && until > DateTime.UtcNow) return false;
+            PausedUntil = DateTime.UtcNow + duration;
+            _skipPause.Dispose();
+            _skipPause = new CancellationTokenSource();
+        }
+        Changed?.Invoke();
+        return true;
+    }
+
     internal void BeginPause(TimeSpan duration)
     {
         lock (_gate)
@@ -121,6 +168,8 @@ public sealed class NetworkStatus
             PausedUntil = null;
             IsBlocked = false;
             ConsecutiveChallenges = 0;
+            ConsecutiveHttp400 = 0;
+            ConsecutiveConnectionFailures = 0;
             Notice = null;
             cts = _skipPause;
         }

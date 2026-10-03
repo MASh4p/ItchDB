@@ -4,8 +4,12 @@
 <MudGrid Spacing="3">
     <MudItem xs="12" md="6" lg="4">
         <MudText Typo="Typo.subtitle1" Class="mb-2">Сеть</MudText>
-        <MudNumericField T="int" @bind-Value="_m.RequestIntervalMs" Label="Интервал между запросами, мс" Min="250" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense"
-                         HelperText="Меньше 1000 мс повышает риск проверки Cloudflare" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_m.RequestIntervalMs" Label="Интервал списков и тегов, мс" Min="250" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="Каталог, теги и похожие страницы. Меньше 1000 мс повышает риск проверки Cloudflare" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_m.GamePageIntervalMs" Label="Интервал страниц игр, мс" Min="1000" Step="1000" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="Отдельный, более редкий ритм, чтобы не получать код 400" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_m.ParallelRequests" Label="Параллельных запросов" Min="1" Max="8" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="Сколько списков и тегов качать одновременно. Страницы игр идут по одной рядом с ними" Class="mb-3" />
         <MudNumericField T="int" @bind-Value="_m.RequestJitterMs" Label="Случайная добавка, мс" Min="0" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
         <MudTextField T="string" @bind-Value="_pauses" Label="Паузы при Cloudflare, мин (через запятую)" Variant="Variant.Outlined" Margin="Margin.Dense"
                       HelperText="После последней паузы сбор останавливается" Class="mb-3" />

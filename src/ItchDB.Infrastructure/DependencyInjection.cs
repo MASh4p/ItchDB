@@ -90,7 +90,7 @@ public static class DependencyInjection
 
     private static bool ShouldRetry(Outcome<HttpResponseMessage> outcome)
     {
-        if (HostConnector.IsRefused(outcome.Exception)) return false;
+        if (HostConnector.IsRefused(outcome.Exception) || HostConnector.IsConnectFailure(outcome.Exception)) return false;
         if (outcome.Exception is HttpRequestException or TimeoutRejectedException) return true;
         if (outcome.Result is not { } r) return false;
         // Cloudflare challenges are handled by ItchHttpClient with long pauses, never by quick retries.

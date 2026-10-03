@@ -42,7 +42,8 @@ public static class ListCrawler
         {
             if (!ctx.HasBudget) break;
             // Page 1 is the HTML counter. Later pages are JSON and are fetched together.
-            var batch = page == 1 ? 1 : Math.Min(4, Math.Min(maxPages - page + 1, Math.Max(1, ctx.RemainingBudget)));
+            var parallel = Math.Clamp(ctx.Settings.ParallelRequests, 1, 8);
+            var batch = page == 1 ? 1 : Math.Min(parallel, Math.Min(maxPages - page + 1, Math.Max(1, ctx.RemainingBudget)));
             ctx.Step($"{spec} — стр. {page}{(batch > 1 ? $"–{page + batch - 1}" : "")}{(total is { } t ? $" из ~{Math.Min(ItchCatalog.MaxPages, (t + 35) / 36)}" : "")}",
                 page, Math.Min(maxPages, total is { } tt ? (tt + 35) / 36 : maxPages));
 

@@ -93,14 +93,16 @@ public sealed class CrawlContext
     public int GamesUpserted => Volatile.Read(ref Root._gamesUpserted);
 
     /// <summary>Fetches a URL; returns null when the request failed after retries (already logged and counted).</summary>
-    public async Task<FetchResult?> FetchAsync(string url, string? accept = null)
+    public async Task<FetchResult?> FetchAsync(string url, string? accept = null, bool gamePage = false)
     {
         await _owner.WaitIfPausedAsync(Ct);
         Ct.ThrowIfCancellationRequested();
         Interlocked.Increment(ref _spent);
         Interlocked.Increment(ref Root._requests);
         _owner.OnRequest();
-        var result = accept is null ? await Http.GetAsync(url, Ct) : await Http.GetAsync(url, Ct, accept);
+        var result = accept is null
+            ? await Http.GetAsync(url, Ct, gamePage: gamePage)
+            : await Http.GetAsync(url, Ct, accept, gamePage);
         if (result.StatusCode == 0 || result.StatusCode >= 400 && !result.IsNotFound)
         {
             Interlocked.Increment(ref Root._errors);
