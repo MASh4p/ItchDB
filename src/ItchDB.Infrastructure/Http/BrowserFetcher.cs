@@ -30,10 +30,11 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
     private static readonly TimeSpan SolveTimeout = TimeSpan.FromMinutes(3);
 
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private SemaphoreSlim _fetchSlots = new(1, 1);
-    private int _slotCount = 1;
+    private readonly object _pool = new();
+    private readonly List<CdpSession> _ownedTabs = new();
     private readonly System.Threading.Channels.Channel<CdpSession> _navTabs =
         System.Threading.Channels.Channel.CreateUnbounded<CdpSession>();
+    private int _poolGeneration;
     private readonly string _profile = Path.Combine(paths.Root, "browser-profile");
     private readonly string _pidFile = Path.Combine(paths.Root, "browser.pid");
     private Process? _process;
@@ -65,75 +66,30 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         }
     }
 
-    public async Task<BrowserPage?> TryGetAsync(string url, CancellationToken ct)
+    public async Task<BrowserPage?> TryGetAsync(string url, CancellationToken ct, bool gamePage = false)
     {
         try
         {
             if (!await EnsureAsync(ct)) return null;
-            BrowserPage? page = null;
-            if (IsDataUrl(url) && _navCount > 0)
+            if (_navCount == 0)
             {
-                await _fetchSlots.WaitAsync(ct);
-                try { page = await FetchDataAsync(url, ct); }
-                finally { _fetchSlots.Release(); }
-                if (page is not null && !ItchHttpClient.IsBlocked(page.Status, page.Body)) return page;
+                await _gate.WaitAsync(ct);
+                try { return await LoadOnTabAsync(_session!, url, ct); }
+                finally { _gate.Release(); }
             }
 
-            var ownTab = _navCount > 0;
-            var tab = ownTab ? await RentTabAsync(ct) : _session!;
-            if (!ownTab) await _gate.WaitAsync(ct);
+            var tab = await RentTabAsync(ct);
+            int generation;
+            lock (_pool) generation = _poolGeneration;
             try
             {
-                if (page is null && IsDataUrl(url)) page = await FetchDataAsync(url, ct);
-                // A fetch that already came back 400 must not be opened in the window: Chrome then
-                // shows a white page with nothing to click, and itch.io stays unusable.
-                var fetchedBlock = page is not null && page.Status is 400 or 429;
-                if (!fetchedBlock && (page is null || ItchHttpClient.IsBlocked(page.Status, page.Body)))
-                {
-                    try
-                    {
-                        page = await LoadAsync(tab, url, ct);
-                    }
-                    catch (IOException ex)
-                    {
-                        log.LogWarning("No response from {Url}: {Message}", url, ex.Message);
-                        return new BrowserPage(0, "", url);
-                    }
-                }
-                var loaded = page ?? throw new IOException("Страница не загрузилась");
-                if (ItchHttpClient.IsChallengeBody(loaded.Body))
-                {
-                    status.SetNotice(SolveNotice);
-                    log.LogWarning("Cloudflare check in the Chrome window for {Url}. Waiting up to {Minutes} min for it to be solved", url, SolveTimeout.TotalMinutes);
-                    await SetWindowAsync(show: true, ct);
-                    try
-                    {
-                        await tab.CommandAsync("Page.bringToFront", new { }, ct);
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
-                    {
-                        log.LogDebug(ex, "Could not bring the check tab forward");
-                    }
-                    var solved = await WaitForSolutionAsync(tab, ct);
-                    status.SetNotice(null);
-                    if (solved is not null)
-                    {
-                        page = solved;
-                        await SetWindowAsync(show: false, ct);
-                    }
-                }
-                else if (page.Status is 400 or 429)
-                {
-                    // A bare 400 gets a short pause in ItchHttpClient. 429 is still a check the user can wait out.
-                    if (page.Status == 429) status.SetNotice(BlockNotice);
-                    if (!fetchedBlock) await LeaveErrorPageAsync(tab, ct);
-                }
-                return page;
+                return await LoadOnTabAsync(tab, url, ct);
             }
             finally
             {
-                if (ownTab) ReturnTab(tab);
-                else _gate.Release();
+                // The caller unblocks when this tab has loaded. The rest, if any, only keeps this tab
+                // out of the pool; the other tabs keep going.
+                ReleaseTab(tab, generation, Cooldown(gamePage));
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -148,9 +104,109 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         }
     }
 
+    private async Task<BrowserPage> LoadOnTabAsync(CdpSession tab, string url, CancellationToken ct)
+    {
+        BrowserPage? page = null;
+        if (IsDataUrl(url)) page = await FetchDataAsync(tab, url, ct);
+        // A fetch that already came back 400 must not be opened in the window: Chrome then
+        // shows a white page with nothing to click, and itch.io stays unusable.
+        var fetchedBlock = page is not null && page.Status is 400 or 429;
+        if (!fetchedBlock && (page is null || ItchHttpClient.IsBlocked(page.Status, page.Body)))
+        {
+            try
+            {
+                page = await LoadAsync(tab, url, ct);
+            }
+            catch (IOException ex)
+            {
+                log.LogWarning("No response from {Url}: {Message}", url, ex.Message);
+                return new BrowserPage(0, "", url);
+            }
+        }
+        var loaded = page ?? throw new IOException("Страница не загрузилась");
+        if (ItchHttpClient.IsChallengeBody(loaded.Body))
+        {
+            status.SetNotice(SolveNotice);
+            log.LogWarning("Cloudflare check in the Chrome window for {Url}. Waiting up to {Minutes} min for it to be solved", url, SolveTimeout.TotalMinutes);
+            await SetWindowAsync(show: true, ct);
+            try
+            {
+                await tab.CommandAsync("Page.bringToFront", new { }, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                log.LogDebug(ex, "Could not bring the check tab forward");
+            }
+            var solved = await WaitForSolutionAsync(tab, ct);
+            status.SetNotice(null);
+            if (solved is not null)
+            {
+                page = solved;
+                await SetWindowAsync(show: false, ct);
+            }
+        }
+        else if (page!.Status is 400 or 429)
+        {
+            // A bare 400 gets a short pause in ItchHttpClient. 429 is still a check the user can wait out.
+            if (page.Status == 429) status.SetNotice(BlockNotice);
+            if (!fetchedBlock) await LeaveErrorPageAsync(tab, ct);
+        }
+        return page ?? loaded;
+    }
+
     private async Task<CdpSession> RentTabAsync(CancellationToken ct) => await _navTabs.Reader.ReadAsync(ct);
 
     private void ReturnTab(CdpSession tab) => _navTabs.Writer.TryWrite(tab);
+
+    private TimeSpan Cooldown(bool gamePage)
+    {
+        var s = settings.Current;
+        var interval = Math.Max(0, gamePage ? s.GamePageIntervalMs : s.RequestIntervalMs);
+        var jitterCap = Math.Max(0, s.RequestJitterMs);
+        var jitter = jitterCap > 0 ? Random.Shared.Next(0, jitterCap + 1) : 0;
+        return TimeSpan.FromMilliseconds(interval + jitter);
+    }
+
+    /// <summary>Returns the tab to the pool after its own rest. Does not delay the request that just finished.</summary>
+    private void ReleaseTab(CdpSession tab, int generation, TimeSpan rest)
+    {
+        if (rest <= TimeSpan.Zero)
+        {
+            ReturnTabIfCurrent(tab, generation);
+            return;
+        }
+        _ = RestThenReturn(tab, generation, rest);
+    }
+
+    private async Task RestThenReturn(CdpSession tab, int generation, TimeSpan rest)
+    {
+        try
+        {
+            await Task.Delay(rest).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        ReturnTabIfCurrent(tab, generation);
+    }
+
+    private void ReturnTabIfCurrent(CdpSession tab, int generation)
+    {
+        lock (_pool)
+        {
+            if (generation != _poolGeneration) return;
+            try
+            {
+                if (!tab.IsOpen) return;
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+            _navTabs.Writer.TryWrite(tab);
+        }
+    }
 
     private async Task<bool> EnsureAsync(CancellationToken ct)
     {
@@ -215,7 +271,6 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         var ws = await WaitForPageSocketAsync(port, ct);
         _session = await ConnectTabAsync(ws, ct);
         var tabs = Math.Clamp(settings.Current.ParallelRequests, 1, 8);
-        EnsureSlots(tabs);
         _navCount = await OpenNavTabsAsync(port, tabs, ct);
         await AttachWindowAsync(port, ct);
         if (!_announced)
@@ -239,7 +294,9 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
                 var node = JsonNode.Parse(await response.Content.ReadAsStringAsync(ct));
                 var socket = node?["webSocketDebuggerUrl"]?.GetValue<string>();
                 if (string.IsNullOrEmpty(socket)) break;
-                ReturnTab(await ConnectTabAsync(socket, ct));
+                var connected = await ConnectTabAsync(socket, ct);
+                lock (_pool) _ownedTabs.Add(connected);
+                ReturnTab(connected);
                 opened++;
             }
             catch (Exception ex) when (ex is HttpRequestException or JsonException)
@@ -281,13 +338,13 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
     /// Catalog JSON must be requested as a fetch, not a page navigation: a navigation asks for HTML
     /// and itch.io then ignores format=json, which the parser reports as "'&lt;' is an invalid start".
     /// </summary>
-    private async Task<BrowserPage?> FetchDataAsync(string url, CancellationToken ct)
+    private async Task<BrowserPage?> FetchDataAsync(CdpSession session, string url, CancellationToken ct)
     {
         if (!IsDataUrl(url)) return null;
-        var href = await LocationAsync(_session!, ct);
+        var href = await LocationAsync(session, ct);
         if (href is null || !href.StartsWith("https://itch.io/", StringComparison.OrdinalIgnoreCase))
         {
-            var home = await LoadAsync(_session!, "https://itch.io/", ct);
+            var home = await LoadAsync(session, "https://itch.io/", ct);
             if (ItchHttpClient.IsChallengeBody(home.Body)) return home;
         }
 
@@ -295,7 +352,7 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
             + ", { credentials: 'include', redirect: 'follow', headers: { 'Accept': 'application/json, text/javascript, */*;q=0.1', 'X-Requested-With': 'XMLHttpRequest' } });"
             + " return { status: res.status, url: res.url, body: await res.text() }; }"
             + " catch (e) { return { status: 0, url: " + JsonSerializer.Serialize(url) + ", body: String(e) }; } })()";
-        var result = await _session!.CommandAsync("Runtime.evaluate", new { expression, awaitPromise = true, returnByValue = true }, ct);
+        var result = await session.CommandAsync("Runtime.evaluate", new { expression, awaitPromise = true, returnByValue = true }, ct);
         if (result["exceptionDetails"] is not null) return null;
         var value = result["result"]?["value"];
         var status = value?["status"]?.GetValue<int>() ?? 0;
@@ -368,20 +425,33 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         var deadline = DateTime.UtcNow + timeout;
         DocumentHit? hit = null;
         var loaded = false;
+        string? finishedRequest = null;
         string? mainRequest = null;
         while (DateTime.UtcNow < deadline)
         {
             var ev = await session.NextEventAsync(deadline - DateTime.UtcNow, ct);
             if (ev is null) break;
             if (ev.Value.Method == "Network.requestWillBeSent" && MainDocumentRequest(ev.Value.Params, frameId) is { } requestId)
+            {
+                // A redirect starts a new document. The previous response is not the page.
                 mainRequest = requestId;
+                if (hit is not null && hit.RequestId != requestId) hit = null;
+                loaded = false;
+            }
             else if (ev.Value.Method == "Network.responseReceived" && DocumentOf(ev.Value.Params, frameId) is { } doc)
                 hit = doc;
             else if (ev.Value.Method == "Network.loadingFailed" && IsMainDocumentFailure(ev.Value.Params, mainRequest))
                 throw new IOException(ev.Value.Params["errorText"]?.GetValue<string>() ?? "соединение оборвалось");
+            else if (ev.Value.Method == "Network.loadingFinished" && mainRequest is not null
+                && ev.Value.Params["requestId"]?.GetValue<string>() == mainRequest)
+                finishedRequest = mainRequest;
             else if (ev.Value.Method == "Page.loadEventFired")
                 loaded = true;
-            if (hit is not null && loaded && hit.Status is < 300 or >= 400) return hit;
+            // The HTML is complete when that document request finishes. Pictures on this tab do not hold
+            // the request. A captcha wait still needs the full load event.
+            var bodyReady = hit is not null && finishedRequest == hit.RequestId;
+            var ready = requireLoad ? loaded : bodyReady || loaded;
+            if (hit is not null && ready && hit.Status is < 300 or >= 400) return hit;
         }
         return requireLoad ? null : hit;
     }
@@ -531,13 +601,25 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
 
     private void Disconnect()
     {
+        List<CdpSession> owned;
+        lock (_pool)
+        {
+            _poolGeneration++;
+            owned = _ownedTabs.ToList();
+            _ownedTabs.Clear();
+            while (_navTabs.Reader.TryRead(out _)) { }
+        }
+        foreach (var tab in owned)
+        {
+            try { tab.Dispose(); }
+            catch (Exception ex) { log.LogDebug(ex, "Browser tab had already closed"); }
+        }
         _session?.Dispose();
         _session = null;
         _window?.Dispose();
         _window = null;
         _windowTargetId = null;
         _navCount = 0;
-        while (_navTabs.Reader.TryRead(out var tab)) tab.Dispose();
         try
         {
             if (_process is { HasExited: false }) _process.Kill(entireProcessTree: true);
@@ -579,13 +661,6 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         {
             _gate.Release();
         }
-    }
-
-    private void EnsureSlots(int tabs)
-    {
-        if (_slotCount == tabs) return;
-        _fetchSlots = new SemaphoreSlim(tabs, tabs);
-        _slotCount = tabs;
     }
 
     private async Task AttachWindowAsync(int port, CancellationToken ct)

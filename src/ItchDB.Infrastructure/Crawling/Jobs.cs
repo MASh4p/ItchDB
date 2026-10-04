@@ -148,17 +148,17 @@ public sealed class GameDetailsJob(int limit) : ICrawlJob
         }
 
         var queue = await SelectAsync(ctx, Math.Min(limit, ctx.RemainingBudget));
-        int ok = 0, failed = 0;
+        var ok = 0;
+        var failed = 0;
         try
         {
-            for (var i = 0; i < queue.Count && ctx.HasBudget; i++)
+            await ctx.ForEachParallelAsync(queue, async (item, i) =>
             {
-                var item = queue[i];
                 ctx.Step($"Игра {i + 1} из {queue.Count}: {item.Url}", i + 1, queue.Count);
                 var fetched = await ctx.FetchAsync(item.Url, gamePage: true);
-                if (await SaveOneAsync(ctx, item.Id, item.Url, fetched)) ok++;
-                else failed++;
-            }
+                if (await SaveOneAsync(ctx, item.Id, item.Url, fetched)) Interlocked.Increment(ref ok);
+                else Interlocked.Increment(ref failed);
+            });
         }
         finally
         {
@@ -173,9 +173,12 @@ public sealed class GameDetailsJob(int limit) : ICrawlJob
     /// </summary>
     private async Task RunAllPendingAsync(CrawlContext ctx)
     {
-        int ok = 0, failed = 0, seen = 0;
+        var ok = 0;
+        var failed = 0;
+        var seen = 0;
         var pending = await CountPendingAsync(ctx);
         var skip = new HashSet<long>();
+        var skipLock = new object();
         try
         {
             if (pending == 0)
@@ -189,19 +192,18 @@ public sealed class GameDetailsJob(int limit) : ICrawlJob
             {
                 var queue = await SelectPendingAsync(ctx, 80, skip);
                 if (queue.Count == 0) break;
-                foreach (var item in queue)
+                await ctx.ForEachParallelAsync(queue, async (item, _) =>
                 {
-                    if (!ctx.HasBudget) break;
-                    seen++;
-                    ctx.Step($"Игра {seen} из {pending}: {item.Url}", seen, pending);
+                    var n = Interlocked.Increment(ref seen);
+                    ctx.Step($"Игра {n} из {pending}: {item.Url}", n, pending);
                     var fetched = await ctx.FetchAsync(item.Url, gamePage: true);
-                    if (await SaveOneAsync(ctx, item.Id, item.Url, fetched)) ok++;
+                    if (await SaveOneAsync(ctx, item.Id, item.Url, fetched)) Interlocked.Increment(ref ok);
                     else
                     {
-                        failed++;
-                        skip.Add(item.Id);
+                        Interlocked.Increment(ref failed);
+                        lock (skipLock) skip.Add(item.Id);
                     }
-                }
+                });
             }
         }
         finally
@@ -344,22 +346,22 @@ public sealed class DevelopersJob(int limit) : ICrawlJob
         }
 
         var ok = 0;
-        for (var i = 0; i < queue.Count && ctx.HasBudget; i++)
+        await ctx.ForEachParallelAsync(queue, async (item, i) =>
         {
-            var (id, username) = queue[i];
+            var (id, username) = item;
             ctx.Step($"Профиль {i + 1} из {queue.Count}: {username}", i + 1, queue.Count);
             var r = await ctx.FetchAsync($"{ItchCatalog.BaseUrl}/profile/{username}");
-            if (r is null) continue;
+            if (r is null) return;
             if (!r.IsSuccess)
             {
                 await ctx.Ingest.MarkProfileFailedAsync(id, ctx.Ct);
-                continue;
+                return;
             }
             var profile = ProfileParser.Parse(r.Body);
             if (profile.Followers is null) ctx.ParseError($"/profile/{username}: не найдено число подписчиков");
             await ctx.Ingest.IngestProfileAsync(id, profile, ctx.Ct);
-            ok++;
-        }
+            Interlocked.Increment(ref ok);
+        });
         ctx.Info($"Профили разработчиков: обновлено {ok}");
     }
 }
@@ -577,11 +579,13 @@ public sealed class ListingTotalsJob(int tagLimit, int minProjects) : ICrawlJob
         }
 
         var due = keys.Where(k => !fresh.Contains(k)).ToList();
-        int saved = 0, failed = 0, tooSmall = 0, done = 0;
-        for (var i = 0; i < due.Count && ctx.HasBudget; i++)
+        var saved = 0;
+        var failed = 0;
+        var tooSmall = 0;
+        var done = 0;
+        await ctx.ForEachParallelAsync(due, async (key, i) =>
         {
-            done++;
-            var key = due[i];
+            Interlocked.Increment(ref done);
             var spec = key.Length == 0 ? ListSpec.Of(ListSpec.Popular) : ListSpec.Of(ListSpec.Popular, key.Split('/'));
             ctx.Step($"Счётчик {i + 1} из {due.Count}: {(key.Length == 0 ? "весь каталог" : key)}", i + 1, due.Count);
             var plain = await ReadTotalAsync(ctx, spec);
@@ -592,8 +596,8 @@ public sealed class ListingTotalsJob(int tagLimit, int minProjects) : ICrawlJob
             {
                 if (!ctx.HasBudget)
                 {
-                    tooSmall++;
-                    continue;
+                    Interlocked.Increment(ref tooSmall);
+                    return;
                 }
                 var adult = await ReadTotalAsync(ctx, ListSpec.Of(ListSpec.Popular, "nsfw", key));
                 failedRead = total is null && adult.Value is null && (plain.Failed || adult.Failed);
@@ -602,14 +606,14 @@ public sealed class ListingTotalsJob(int tagLimit, int minProjects) : ICrawlJob
 
             if (total is not { } n || AdultListMayBeLarger(n, rated))
             {
-                if (failedRead) failed++;
-                else if (total is not null) tooSmall++;
-                continue;
+                if (failedRead) Interlocked.Increment(ref failed);
+                else if (total is not null) Interlocked.Increment(ref tooSmall);
+                return;
             }
 
             await ctx.Ingest.SaveListingTotalAsync(ctx.Today, spec.FilterKey, n, ctx.Ct);
-            saved++;
-        }
+            Interlocked.Increment(ref saved);
+        });
 
         var left = due.Count - done;
         ctx.Info($"Счётчики списков: записано {saved}, свежие пропущены {keys.Count - due.Count}, ошибок {failed}" +

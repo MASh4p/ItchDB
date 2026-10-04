@@ -4,14 +4,13 @@ using ItchDB.Infrastructure.Settings;
 namespace ItchDB.Infrastructure.Http;
 
 /// <summary>
-/// Spaces requests to itch.io. Lists and tags share one interval and can run several at a time
-/// while the browser session is healthy. Game pages use their own, slower interval and stay one at a time.
-/// The plain HTTP client stays one-at-a-time.
+/// Caps how many itch.io requests are in flight. A live browser session runs up to the parallel-request
+/// setting at once; each of those waits only for its own tab. The plain HTTP client stays one-at-a-time
+/// and keeps the configured gap.
 /// </summary>
 public sealed class RequestThrottle(SettingsService settings)
 {
     private readonly SemaphoreSlim _serial = new(1, 1);
-    private readonly SemaphoreSlim _game = new(1, 1);
     private readonly SlotGate _lists = new();
     private readonly object _pace = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
@@ -24,49 +23,27 @@ public sealed class RequestThrottle(SettingsService settings)
 
     public async Task<IDisposable> AcquireAsync(CancellationToken ct, bool gamePage = false)
     {
-        var fast = _fast;
-        if (!fast)
+        if (!_fast)
         {
             await _serial.WaitAsync(ct);
-            try
+            if (!_fast)
             {
-                await WaitTurnAsync(gamePage, ct);
+                try
+                {
+                    await WaitTurnAsync(gamePage, ct);
+                }
+                catch
+                {
+                    _serial.Release();
+                    throw;
+                }
+                return new SerialReleaser(_serial);
             }
-            catch
-            {
-                _serial.Release();
-                throw;
-            }
-            return new SerialReleaser(_serial);
-        }
-
-        if (gamePage)
-        {
-            await _game.WaitAsync(ct);
-            try
-            {
-                await WaitTurnAsync(gamePage: true, ct);
-            }
-            catch
-            {
-                _game.Release();
-                throw;
-            }
-            return new SerialReleaser(_game);
+            _serial.Release();
         }
 
         var limit = Math.Clamp(settings.Current.ParallelRequests, 1, 8);
-        var slot = await _lists.EnterAsync(limit, ct);
-        try
-        {
-            await WaitTurnAsync(gamePage: false, ct);
-        }
-        catch
-        {
-            slot.Dispose();
-            throw;
-        }
-        return slot;
+        return await _lists.EnterAsync(limit, ct);
     }
 
     private async Task WaitTurnAsync(bool gamePage, CancellationToken ct)
@@ -78,7 +55,7 @@ public sealed class RequestThrottle(SettingsService settings)
             var next = gamePage ? _nextGame : _nextList;
             wait = next - _clock.Elapsed;
             if (wait < TimeSpan.Zero) wait = TimeSpan.Zero;
-            var interval = Math.Max(250, gamePage ? s.GamePageIntervalMs : s.RequestIntervalMs);
+            var interval = Math.Max(0, gamePage ? s.GamePageIntervalMs : s.RequestIntervalMs);
             var jitterCap = s.RequestJitterMs;
             var jitter = jitterCap > 0 ? Random.Shared.Next(0, jitterCap + 1) : 0;
             var updated = _clock.Elapsed + wait + TimeSpan.FromMilliseconds(interval + jitter);

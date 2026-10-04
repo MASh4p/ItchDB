@@ -4,11 +4,11 @@ namespace ItchDB.Infrastructure.Settings;
 public sealed class AppSettingsModel
 {
     // Network
-    /// <summary>Gap between catalog requests: tags, lists and similar pages.</summary>
+    /// <summary>How long a tab rests after a list or tag page. Other tabs keep loading.</summary>
     public int RequestIntervalMs { get; set; } = 1300;
-    /// <summary>Gap between individual game pages. Slower than lists, so a burst does not earn HTTP 400.</summary>
+    /// <summary>How long a tab rests after a game page. Other tabs do not wait for it.</summary>
     public int GamePageIntervalMs { get; set; } = 12_000;
-    /// <summary>How many tag and list pages may be in flight together. Game pages stay one at a time.</summary>
+    /// <summary>How many browser tabs may load at once. A request waits only for its own tab.</summary>
     public int ParallelRequests { get; set; } = 4;
     public int RequestJitterMs { get; set; } = 900;
     public string UserAgent { get; set; } =

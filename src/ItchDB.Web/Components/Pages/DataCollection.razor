@@ -15,9 +15,9 @@
 <MudText Typo="Typo.h4" Class="mb-1">Сбор данных</MudText>
 <MudText Class="itch-muted mb-4" Style="max-width:1000px">
     У itch.io нет открытого API каталога, поэтому ItchDB читает публичные страницы как обычный браузер.
-    Списки и теги — раз в @Fmt.N(Settings.Current.RequestIntervalMs / 1000.0, 1)–@Fmt.N((Settings.Current.RequestIntervalMs + Settings.Current.RequestJitterMs) / 1000.0, 1) с,
-    до @Math.Clamp(Settings.Current.ParallelRequests, 1, 8) одновременно.
-    Страницы отдельных игр качаются в фоне, по одной примерно раз в @Fmt.N(Settings.Current.GamePageIntervalMs / 1000.0, 0) с, одновременно со списками и тегами.
+    Одновременно открыто до @Math.Clamp(Settings.Current.ParallelRequests, 1, 8) вкладок. Каждая ждёт только свою загрузку, затем эта вкладка отдыхает:
+    списки и теги — @Fmt.N(Settings.Current.RequestIntervalMs / 1000.0, 1)–@Fmt.N((Settings.Current.RequestIntervalMs + Settings.Current.RequestJitterMs) / 1000.0, 1) с,
+    страницы игр — @Fmt.N(Settings.Current.GamePageIntervalMs / 1000.0, 0) с. Остальные вкладки в это время не стоят.
     Данные хранятся локально, каждый запуск продолжает с места остановки. Сбор идёт только пока приложение открыто.
 </MudText>
 
@@ -188,7 +188,7 @@
                         <MudText Typo="Typo.caption" Class="itch-muted">
                             @if (allPages)
                             {
-                                <text>все игры без карточки, по одной странице</text>
+                                <text>все игры без карточки, сразу в нескольких вкладках</text>
                                 @if (_stats is { } left)
                                 {
                                     <text> · осталось @Fmt.N(Math.Max(0, left.Games - left.GamesWithDetails))</text>
@@ -537,7 +537,7 @@
     {
         var s = Settings.Current;
         var parallel = Math.Clamp(s.ParallelRequests, 1, 8);
-        var perRequest = (Math.Max(250, s.RequestIntervalMs) + s.RequestJitterMs / 2.0 + 350) / 1000.0 / parallel;
+        var perRequest = (Math.Max(0, s.RequestIntervalMs) + s.RequestJitterMs / 2.0 + 350) / 1000.0 / parallel;
         return TimeSpan.FromSeconds(requests * perRequest);
     }
 
@@ -562,11 +562,11 @@
                 $"{s.DailyDetails} страниц игр, {s.DailyProfiles} профилей, джемы и порция глубокого сбора. Ежедневные снимки дают тренды и «горячее».",
             CrawlProfile.GamePages =>
                 "Только страницы игр: полные теги, дата выхода, движок, скриншоты и статус. Списки не качаются. " +
-                "Сначала игры с наибольшим числом оценок. Одна страница примерно раз в " +
-                $"{Fmt.N(s.GamePageIntervalMs / 1000.0, 0)} с. Остановка сохраняет прогресс, следующий запуск продолжит с оставшихся.",
+                "Сначала игры с наибольшим числом оценок. Вкладки грузят страницы параллельно и ждут только свою загрузку, " +
+                $"затем каждая отдыхает {Fmt.N(s.GamePageIntervalMs / 1000.0, 0)} с. Остановка сохраняет прогресс, следующий запуск продолжит с оставшихся.",
             _ =>
                 $"Сначала счётчики списков (сколько всего игр у тега или жанра, включая нули — сами такие игры не скачиваются), затем страницы самых популярных игр и списки: годы, жанры, теги от {s.DeepMinTagProjects} проектов, движки и в конце 18+. " +
-                "Списки длиннее 200 страниц дробятся. Уже пройденное пропускается. Страницы игр качаются по одной в фоне; полный проход — отдельной кнопкой «Карточки игр».",
+                "Списки длиннее 200 страниц дробятся. Уже пройденное пропускается. Страницы игр качаются в своих вкладках параллельно со списками; полный проход — отдельной кнопкой «Карточки игр».",
         };
     }
 

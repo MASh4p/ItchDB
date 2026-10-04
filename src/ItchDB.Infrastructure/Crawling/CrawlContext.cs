@@ -116,6 +116,53 @@ public sealed class CrawlContext
 
     public void CountGames(IngestResult r) => Interlocked.Add(ref Root._gamesUpserted, r.Inserted + r.Updated);
 
+    /// <summary>
+    /// Runs independent items together, up to the parallel-request setting.
+    /// One item waits only for its own fetch; the others are not held behind it.
+    /// </summary>
+    public async Task ForEachParallelAsync<T>(IReadOnlyList<T> items, Func<T, int, Task> body)
+    {
+        if (items.Count == 0) return;
+        var degree = Math.Min(Math.Clamp(Settings.ParallelRequests, 1, 8), items.Count);
+        var next = 0;
+        var stop = 0;
+        var workers = new Task[degree];
+        for (var w = 0; w < degree; w++) workers[w] = Work();
+        try
+        {
+            await Task.WhenAll(workers);
+        }
+        catch (Exception ex)
+        {
+            var inner = ex is AggregateException aggregate
+                ? aggregate.Flatten().InnerExceptions
+                : (IReadOnlyList<Exception>)[ex];
+            if (Ct.IsCancellationRequested && inner.FirstOrDefault(e => e is OperationCanceledException) is { } cancel)
+                throw cancel;
+            throw inner.Count == 1 ? inner[0] : ex;
+        }
+
+        async Task Work()
+        {
+            while (Volatile.Read(ref stop) == 0)
+            {
+                if (!HasBudget) return;
+                Ct.ThrowIfCancellationRequested();
+                var i = Interlocked.Increment(ref next) - 1;
+                if (i >= items.Count) return;
+                try
+                {
+                    await body(items[i], i);
+                }
+                catch
+                {
+                    Interlocked.Exchange(ref stop, 1);
+                    throw;
+                }
+            }
+        }
+    }
+
     public void Step(string text, int done = 0, int total = 0)
     {
         if (!_quiet) _owner.ReportStep(text, done, total);

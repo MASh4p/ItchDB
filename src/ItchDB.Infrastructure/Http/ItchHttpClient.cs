@@ -15,8 +15,9 @@ public sealed record FetchResult(int StatusCode, string Body, string Url)
 public sealed class CloudflareBlockedException(string message) : Exception(message);
 
 /// <summary>
-/// The only way the app talks to itch.io: one request at a time, a polite interval with jitter,
-/// retries for transient errors (resilience handler) and an escalating pause on Cloudflare challenges.
+/// The only way the app talks to itch.io. Browser tabs load in parallel and each request waits
+/// only for its own tab; the plain HTTP client stays one at a time. Transient errors are retried
+/// and a Cloudflare challenge escalates into a shared pause.
 /// </summary>
 public sealed class ItchHttpClient(
     HttpClient http,
@@ -70,7 +71,7 @@ public sealed class ItchHttpClient(
         (FetchResult Result, bool Challenge) r;
         using (await throttle.AcquireAsync(ct, gamePage))
         {
-            r = await SendAsync(url, accept, ct);
+            r = await SendAsync(url, accept, ct, gamePage);
         }
         if (r.Result.StatusCode == 0)
         {
@@ -150,11 +151,11 @@ public sealed class ItchHttpClient(
         return pause;
     }
 
-    private async Task<(FetchResult Result, bool Challenge)> SendAsync(string url, string accept, CancellationToken ct)
+    private async Task<(FetchResult Result, bool Challenge)> SendAsync(string url, string accept, CancellationToken ct, bool gamePage = false)
     {
         if (browser is not null)
         {
-            var page = await browser.TryGetAsync(url, ct);
+            var page = await browser.TryGetAsync(url, ct, gamePage);
             if (page is not null)
             {
                 var challenge = IsCaptcha(page.Status, page.Body);
