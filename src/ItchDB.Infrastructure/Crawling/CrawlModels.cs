@@ -10,6 +10,7 @@ public enum CrawlProfile
     Deep = 1,
     Daily = 2,
     Tracking = 3,
+    GamePages = 4,
 }
 
 public enum CrawlState
@@ -30,6 +31,7 @@ public static class CrawlProfiles
         CrawlProfile.Deep => "Глубокий сбор",
         CrawlProfile.Daily => "Ежедневное обновление",
         CrawlProfile.Tracking => "Проверка отслеживаемых игр",
+        CrawlProfile.GamePages => "Карточки игр",
         _ => p.ToString(),
     };
 

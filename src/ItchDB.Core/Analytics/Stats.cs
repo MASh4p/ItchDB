@@ -16,6 +16,20 @@ public static class Stats
 
     public static double Median(IReadOnlyList<double> sorted) => Quantile(sorted, 0.5);
 
+    /// <summary>exp(mean(log x)) over positive values. Spreads segments that share an integer median but not the rest of the distribution.</summary>
+    public static double GeometricMean(IReadOnlyList<double> values)
+    {
+        double sum = 0;
+        var n = 0;
+        foreach (var v in values)
+        {
+            if (v <= 0) continue;
+            sum += Math.Log(v);
+            n++;
+        }
+        return n == 0 ? double.NaN : Math.Exp(sum / n);
+    }
+
     public static double[] Sorted(IEnumerable<double> values)
     {
         var a = values.ToArray();

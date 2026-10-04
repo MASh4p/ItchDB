@@ -17,7 +17,7 @@ public sealed record BrowserPage(int Status, string Body, string FinalUrl);
 /// Loads itch.io pages through a real Chrome or Edge window. Cloudflare ties its check to the browser,
 /// so a cookie copied into the app's own HTTP client is rejected; the same check passes in Chrome itself.
 /// </summary>
-public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, NetworkStatus status, SettingsService settings, ILogger<BrowserFetcher> log) : IDisposable
+public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, NetworkStatus status, SettingsService settings, LaunchProxy launchProxy, ILogger<BrowserFetcher> log) : IDisposable
 {
     public const string SolveNotice =
         "В окне Chrome проверка Cloudflare. Если она не исчезла сама, пройдите её там — сбор продолжится и пауза не понадобится.";
@@ -43,6 +43,7 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
     private int _navCount;
     private string? _browserName;
     private bool _announced;
+    private string _launchedProxy = "";
 
     public string? BrowserName => _browserName;
 
@@ -153,11 +154,16 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
 
     private async Task<bool> EnsureAsync(CancellationToken ct)
     {
-        if (_session is { IsOpen: true }) return true;
         await _gate.WaitAsync(ct);
         try
         {
-            if (_session is { IsOpen: true }) return true;
+            var wanted = LocalProxy.ForChrome(launchProxy.Address) ?? "";
+            if (_session is { IsOpen: true } && wanted == _launchedProxy) return true;
+            if (_session is { IsOpen: true })
+            {
+                log.LogInformation("Прокси изменился, окно сбора перезапускается");
+                Disconnect();
+            }
             return await StartBrowserAsync(ct);
         }
         finally
@@ -194,6 +200,14 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         psi.ArgumentList.Add("--disable-backgrounding-occluded-windows");
         psi.ArgumentList.Add("--disable-renderer-backgrounding");
         psi.ArgumentList.Add("--window-size=1100,800");
+        var chromeProxy = LocalProxy.ForChrome(launchProxy.Address);
+        if (chromeProxy is not null)
+        {
+            psi.ArgumentList.Add($"--proxy-server={chromeProxy}");
+            psi.ArgumentList.Add("--proxy-bypass-list=<-loopback>");
+            log.LogInformation("Окно сбора использует прокси {Proxy}", chromeProxy);
+        }
+        _launchedProxy = chromeProxy ?? "";
         psi.ArgumentList.Add("about:blank");
         _process = Process.Start(psi) ?? throw new IOException($"Не удалось запустить {_browserName}");
         File.WriteAllText(_pidFile, _process.Id.ToString());

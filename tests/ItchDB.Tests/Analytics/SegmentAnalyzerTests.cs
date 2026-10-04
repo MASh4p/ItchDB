@@ -33,6 +33,21 @@ public class SegmentAnalyzerTests
         Assert.Equal(1, s.Bin1To4);
         Assert.Equal(3, s.Bin5To49);
         Assert.True(s.SmallSample);
+        Assert.True(s.IncludesUnrated);
+    }
+
+    [Fact]
+    public void Compute_RatedOnlyIgnoresGamesWithZeroRatings()
+    {
+        var d = SegmentData(new() { ["tag-a"] = 100 });
+        var s = new SegmentAnalyzer(d, new AnalyticsFilter(false, 4, IncludeUnrated: false), P, TestData.Now)
+            .Compute(Segments.FromTag(d.Tags[1]));
+
+        Assert.Equal(4, s.Denominator);
+        Assert.False(s.DenominatorEstimated);
+        Assert.False(s.IncludesUnrated);
+        Assert.Equal(0.5, s.SuccessShare, 10);
+        Assert.Equal(96, s.Bin0);
     }
 
     [Fact]
@@ -67,6 +82,7 @@ public class SegmentAnalyzerTests
         {
             Segment = new SegmentDef { Key = key, Name = key, Kind = SegmentKind.Tag },
             AdjMedian = demand,
+            Typical = demand,
             Denominator = games,
             SuccessLow = demand / 1000,
         };
@@ -90,7 +106,7 @@ public class SegmentAnalyzerTests
     public void Rank_SkipsSmallSamples()
     {
         var small = new SegmentStats { Segment = Segments.All, AdjMedian = 1000, Denominator = 1, SmallSample = true };
-        var normal = new SegmentStats { Segment = new SegmentDef { Key = "x", Name = "x", Kind = SegmentKind.Tag }, AdjMedian = 5, Denominator = 100 };
+        var normal = new SegmentStats { Segment = new SegmentDef { Key = "x", Name = "x", Kind = SegmentKind.Tag }, AdjMedian = 5, Typical = 5, Denominator = 100 };
 
         SegmentAnalyzer.Rank([small, normal], P);
 
@@ -125,5 +141,24 @@ public class SegmentAnalyzerTests
 
         Assert.Equal("2023–2024 против 2021–2022", analyzer.TrendCohorts);
         Assert.Equal(3, s.Trend!.Value, 10);
+    }
+
+    [Fact]
+    public void Compute_TypicalSeparatesTagsThatShareAMedian()
+    {
+        var flat = TestData.Tag(1, "tag-flat");
+        var tail = TestData.Tag(2, "tag-tail");
+        var games = new List<GameRow>();
+        var id = 1L;
+        foreach (var r in new[] { 2, 2, 2, 2, 2 }) games.Add(TestData.Game(id++, r, [1]));
+        foreach (var r in new[] { 1, 1, 2, 4, 8 }) games.Add(TestData.Game(id++, r, [2]));
+        var analyzer = new SegmentAnalyzer(TestData.Dataset(games, [flat, tail]), new AnalyticsFilter(true, 1), P, TestData.Now);
+
+        var a = analyzer.Compute(Segments.FromTag(flat));
+        var b = analyzer.Compute(Segments.FromTag(tail));
+
+        Assert.Equal(2, a.Median);
+        Assert.Equal(2, b.Median);
+        Assert.True(b.Typical > a.Typical);
     }
 }

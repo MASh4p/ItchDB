@@ -2,6 +2,7 @@ using ApexCharts;
 using ItchDB.Infrastructure;
 using ItchDB.Infrastructure.Analytics;
 using ItchDB.Infrastructure.Data;
+using ItchDB.Infrastructure.Http;
 using ItchDB.Web.Components;
 using ItchDB.Web.Services;
 using MudBlazor.Services;
@@ -45,6 +46,7 @@ builder.Services.AddScoped<ExportService>();
 var app = builder.Build();
 
 await DatabaseInitializer.InitializeAsync(app.Services);
+if (!ApplyLaunchProxy(app, args)) return;
 _ = app.Services.GetRequiredService<AnalyticsService>().RefreshAsync();
 
 if (!app.Environment.IsDevelopment())
@@ -58,3 +60,17 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 app.Run();
+
+static bool ApplyLaunchProxy(WebApplication app, string[] args)
+{
+    if (!LaunchProxy.TryReadArgument(args, out var address, out var error))
+    {
+        Log.Error("{Error}", error);
+        Environment.ExitCode = 1;
+        return false;
+    }
+    app.Services.GetRequiredService<LaunchProxy>().Address = address;
+    if (address.Length > 0) Log.Information("Локальный прокси: {Proxy}", address);
+    else Log.Information("Запуск без прокси");
+    return true;
+}

@@ -45,7 +45,7 @@
         <MudGrid Spacing="3" Class="mb-1">
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Игр на itch.io" Value="@((s.DenominatorEstimated ? "≈" : "") + Fmt.Short(s.Denominator))" Large="true"
+                    <Kpi Label="@(s.IncludesUnrated ? "Игр на itch.io" : "Игр с оценками")" Value="@((s.DenominatorEstimated ? "≈" : "") + Fmt.Short(s.Denominator))" Large="true"
                          Hint="@($"в базе {Fmt.N(s.Known)}{(s.ThisWeek is { } w ? $" · +{Fmt.N(w)} за неделю" : "")}")"
                          Formula="@Formulas.Competition.Formula" Tip="@Formulas.Competition.Text" />
                 </MudPaper>

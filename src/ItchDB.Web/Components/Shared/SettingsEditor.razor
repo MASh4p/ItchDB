@@ -82,6 +82,7 @@
             <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepRefreshDays" Label="Перепроверять списки через, дней" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
             <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepDetails" Label="Глубокий: страниц игр" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
             <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepProfiles" Label="Глубокий: профилей" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.GamePagesPerRun" Label="Карточки: страниц за запуск" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="0 — все игры без карточки" /></MudItem>
         </MudGrid>
     </MudItem>
 
@@ -112,6 +113,7 @@
         {
             DefaultMinRatings = keep.DefaultMinRatings,
             DefaultShowNsfw = keep.DefaultShowNsfw,
+            DefaultIncludeUnrated = keep.DefaultIncludeUnrated,
             CalibratedViewsPerRating = keep.CalibratedViewsPerRating,
             CalibratedDownloadsPerRating = keep.CalibratedDownloadsPerRating,
         };
@@ -132,6 +134,7 @@
         var current = Settings.Current;
         _m.DefaultMinRatings = current.DefaultMinRatings;
         _m.DefaultShowNsfw = current.DefaultShowNsfw;
+        _m.DefaultIncludeUnrated = current.DefaultIncludeUnrated;
         await Settings.SaveAsync(_m);
         Revert();
         Snackbar.Add("Настройки сохранены", Severity.Success);

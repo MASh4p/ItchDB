@@ -22,6 +22,8 @@ public sealed class AppSettingsModel
     // Global filters
     public int DefaultMinRatings { get; set; } = 4;
     public bool DefaultShowNsfw { get; set; }
+    /// <summary>Success and competition use the itch.io list counter, including games with zero ratings.</summary>
+    public bool DefaultIncludeUnrated { get; set; } = true;
 
     // Analytics
     public int SuccessThreshold { get; set; } = 10;
@@ -62,5 +64,7 @@ public sealed class AppSettingsModel
     public int DeepRefreshDays { get; set; } = 30;
     public int DeepDetails { get; set; } = 3000;
     public int DeepProfiles { get; set; } = 600;
+    /// <summary>0 means the game-page profile keeps going until every game without a page has one.</summary>
+    public int GamePagesPerRun { get; set; }
     public int JamEntriesPerRun { get; set; } = 6;
 }

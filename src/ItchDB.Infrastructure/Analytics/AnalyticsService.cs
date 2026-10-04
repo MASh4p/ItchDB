@@ -103,7 +103,8 @@ public sealed class AnalyticsService : IDisposable
     /// <summary>One row per segment and day with the unfiltered defaults, so history is comparable across days.</summary>
     private async Task WriteSegmentHistoryAsync(AnalyticsSnapshot s)
     {
-        var f = new AnalyticsFilter(false, _settings.Current.DefaultMinRatings);
+        var s0 = _settings.Current;
+        var f = new AnalyticsFilter(false, s0.DefaultMinRatings, s0.DefaultIncludeUnrated);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var rows = new List<SegmentStats> { s.All(f) };
         rows.AddRange(s.Genres(f));

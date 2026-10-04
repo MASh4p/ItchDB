@@ -13,12 +13,14 @@ public sealed class UiState
         var s = settings.Current;
         _showNsfw = s.DefaultShowNsfw;
         _minRatings = Math.Max(1, s.DefaultMinRatings);
+        _includeUnrated = s.DefaultIncludeUnrated;
     }
 
     public static readonly int[] MinRatingOptions = [1, 2, 4, 5, 10, 25, 50, 100];
 
     private bool _showNsfw;
     private int _minRatings;
+    private bool _includeUnrated;
 
     public event Action? Changed;
 
@@ -47,11 +49,25 @@ public sealed class UiState
         }
     }
 
+    /// <summary>When set, success and competition include games with zero ratings via the list counter.</summary>
+    public bool IncludeUnrated
+    {
+        get => _includeUnrated;
+        set
+        {
+            if (_includeUnrated == value) return;
+            _includeUnrated = value;
+            _ = PersistAsync();
+            Changed?.Invoke();
+        }
+    }
+
     private async Task PersistAsync()
     {
         var model = _settings.Clone();
         model.DefaultShowNsfw = _showNsfw;
         model.DefaultMinRatings = _minRatings;
+        model.DefaultIncludeUnrated = _includeUnrated;
         await _settings.SaveAsync(model);
     }
 }

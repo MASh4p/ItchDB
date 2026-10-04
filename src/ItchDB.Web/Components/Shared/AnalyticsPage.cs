@@ -25,7 +25,7 @@ public abstract class AnalyticsPage : ComponentBase, IDisposable
         Analytics.Updated += OnAnalyticsUpdated;
         Ui.Changed += OnFiltersChanged;
         A = Analytics.Current;
-        F = new AnalyticsFilter(Ui.ShowNsfw, Ui.MinRatings);
+        F = new AnalyticsFilter(Ui.ShowNsfw, Ui.MinRatings, Ui.IncludeUnrated);
         if (!Analytics.IsLoaded) _ = Analytics.EnsureLoadedAsync();
         await RecomputeAsync();
     }
@@ -64,7 +64,7 @@ public abstract class AnalyticsPage : ComponentBase, IDisposable
 
     private void OnFiltersChanged() => InvokeAsync(async () =>
     {
-        F = new AnalyticsFilter(Ui.ShowNsfw, Ui.MinRatings);
+        F = new AnalyticsFilter(Ui.ShowNsfw, Ui.MinRatings, Ui.IncludeUnrated);
         await RecomputeAsync();
         StateHasChanged();
     });

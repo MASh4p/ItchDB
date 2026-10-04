@@ -134,13 +134,13 @@ public sealed class AnalyticsDataset
 }
 
 /// <summary>Global UI filters that every metric respects.</summary>
-public sealed record AnalyticsFilter(bool ShowNsfw, int MinRatings)
+public sealed record AnalyticsFilter(bool ShowNsfw, int MinRatings, bool IncludeUnrated = true)
 {
-    public static readonly AnalyticsFilter Default = new(false, 4);
+    public static readonly AnalyticsFilter Default = new(false, 4, true);
 
     public bool Includes(GameRow g) => ShowNsfw || !g.IsNsfw;
 
-    public string Key => $"{(ShowNsfw ? 1 : 0)}:{MinRatings}";
+    public string Key => $"{(ShowNsfw ? 1 : 0)}:{MinRatings}:{(IncludeUnrated ? 1 : 0)}";
 }
 
 /// <summary>Tunable analytics parameters (mirrors the settings page).</summary>

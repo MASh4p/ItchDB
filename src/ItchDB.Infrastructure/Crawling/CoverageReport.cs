@@ -25,6 +25,7 @@ public sealed record DatabaseStats(
     int ListsComplete,
     int ListsTruncated,
     int ListsInProgress,
+    int ListingCounters,
     IReadOnlyList<YearCoverage> Years);
 
 /// <summary>What is in the database and how much of the itch.io catalog the crawl has covered.</summary>
@@ -46,6 +47,7 @@ public sealed class CoverageReport(IDbContextFactory<ItchDbContext> dbFactory, C
         var days = await db.GameSnapshots.Select(s => s.Day).Distinct().CountAsync(ct);
         var firstDay = await db.GameSnapshots.OrderBy(s => s.Day).Select(s => (DateOnly?)s.Day).FirstOrDefaultAsync(ct);
         var catalogTotal = await db.ListingTotals.Where(t => t.FilterKey == "").OrderByDescending(t => t.Day).Select(t => (int?)t.Results).FirstOrDefaultAsync(ct);
+        var listingCounters = await db.ListingTotals.Select(t => t.FilterKey).Distinct().CountAsync(ct);
 
         var byYear = await db.Games.Where(g => g.PublishedYear != null && !g.IsNsfw)
             .GroupBy(g => g.PublishedYear!.Value)
@@ -88,6 +90,7 @@ public sealed class CoverageReport(IDbContextFactory<ItchDbContext> dbFactory, C
             all.Values.Count(c => c.Status == ListStatus.Complete),
             all.Values.Count(c => c.Status == ListStatus.Truncated),
             all.Values.Count(c => c.Status == ListStatus.InProgress),
+            listingCounters,
             years);
     }
 

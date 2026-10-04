@@ -35,6 +35,7 @@ public static class CrawlPlanner
         CrawlProfile.QuickStart => Quick(s),
         CrawlProfile.Daily => Daily(s),
         CrawlProfile.Tracking => [new(new TrackedGamesJob(), 400)],
+        CrawlProfile.GamePages => [new(new GameDetailsJob(s.GamePagesPerRun), GamePagesBudget(s))],
         _ => Deep(s),
     };
 
@@ -46,6 +47,7 @@ public static class CrawlPlanner
         return
         [
             new(new TagCatalogJob(), 30),
+            new(new ListingTotalsJob(s.QuickTopTags, 0), TotalsBudget(s.QuickTopTags)),
             new(new ListsJob("Топ по оценкам: весь каталог, годы, жанры, крупные теги", async ctx =>
             {
                 var tasks = new List<ListTask> { new(ListSpec.Of(ListSpec.TopRated), 15) };
@@ -78,6 +80,7 @@ public static class CrawlPlanner
         return
         [
             new(new TagCatalogJob(), 30),
+            new(new ListingTotalsJob(100, 0), TotalsBudget(100)),
             new(new ListsJob("Позиции в popular и new-and-popular", async ctx =>
             {
                 var tasks = new List<ListTask>
@@ -119,6 +122,7 @@ public static class CrawlPlanner
     private static List<PlannedJob> Deep(AppSettingsModel s) =>
     [
         new(new TagCatalogJob(), 30),
+        new(new ListingTotalsJob(800, s.DeepMinTagProjects), TotalsBudget(800)),
         new(new NewReleasesJob(40, stopAtKnown: false), 80),
         new(new GameDetailsJob(Math.Max(s.DeepDetails, 8_000)), Math.Max(s.DeepDetails, 8_000)),
         new(new ListsJob("Полный каталог по сегментам (годы → цена → жанр, теги, движки, 18+)", DeepBacklogAsync), CatalogBudget(s)),
@@ -158,6 +162,12 @@ public static class CrawlPlanner
 
     /// <summary>0 and the old default of 6000 mean "walk the lists until they are done", not a short cap.</summary>
     public static int CatalogBudget(AppSettingsModel s) => s.DeepListPages is 0 or 6000 ? 500_000 : s.DeepListPages;
+
+    /// <summary>0 means every game that still has no page, capped so one run can be stopped and resumed.</summary>
+    public static int GamePagesBudget(AppSettingsModel s) => s.GamePagesPerRun <= 0 ? 500_000 : s.GamePagesPerRun;
+
+    /// <summary>Fixed filters (catalog, genres, years, platforms, price) plus the requested tags.</summary>
+    private static int TotalsBudget(int tags) => 360 + Math.Max(0, tags);
 
     private static readonly List<string> ExcludedTagSlugs = [.. ItchCatalog.NsfwTags, .. ItchCatalog.Genres.Select(g => g.Slug)];
 

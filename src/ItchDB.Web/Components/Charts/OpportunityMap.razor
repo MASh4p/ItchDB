@@ -46,10 +46,10 @@ else
         }
 
         <text x="@((L + W - R) / 2)" y="@(H - 6)" text-anchor="middle" class="itch-map-axis">Конкуренция: игр в сегменте на itch.io (лог. шкала) →</text>
-        <text x="14" y="@((T + H - B) / 2)" text-anchor="middle" class="itch-map-axis" transform="rotate(-90 14 @((T + H - B) / 2))">Спрос: сглаженная медиана оценок →</text>
+        <text x="14" y="@((T + H - B) / 2)" text-anchor="middle" class="itch-map-axis" transform="rotate(-90 14 @((T + H - B) / 2))">Спрос: типичные оценки →</text>
     </svg>
     <MudText Typo="Typo.caption" Class="itch-muted">
-        Пунктир — медианы среди показанных сегментов. Размер точки — шанс набрать @Threshold+ оценок. Клик по точке открывает страницу сегмента.
+        Высота — типичное число оценок: геометрическое среднее игр с ≥ @MinRatings оценками, сглаженное к itch.io. Пунктир — медианы среди показанных сегментов. Размер точки — шанс набрать @Threshold+ оценок. Клик по точке открывает страницу сегмента.
     </MudText>
 }
 
@@ -83,12 +83,12 @@ else
 
     protected override void OnParametersSet()
     {
-        var items = Items.Where(s => s.Opportunity is not null && s.Denominator > 0 && s.AdjMedian > 0).ToList();
+        var items = Items.Where(s => s.Opportunity is not null && s.Denominator > 0 && s.Typical > 0).ToList();
         _points = [];
         if (items.Count == 0) return;
 
         var xs = items.Select(s => Math.Log10(s.Denominator)).ToList();
-        var ys = items.Select(s => Math.Log10(1 + s.AdjMedian)).ToList();
+        var ys = items.Select(s => Math.Log10(s.Typical)).ToList();
         double x0 = Math.Floor(xs.Min() * 2) / 2, x1 = Math.Ceiling(xs.Max() * 2) / 2;
         double y0 = Math.Max(0, Math.Floor(ys.Min() * 4) / 4), y1 = Math.Ceiling(ys.Max() * 4) / 4;
         if (x1 - x0 < 0.5) x1 = x0 + 0.5;
@@ -109,7 +109,7 @@ else
         _yTicks = [];
         foreach (var v in new double[] { 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000 })
         {
-            var lv = Math.Log10(1 + v);
+            var lv = Math.Log10(v);
             if (lv >= y0 && lv <= y1) _yTicks.Add(new Tick(Py(lv), Fmt.Short(v)));
         }
     }
@@ -159,8 +159,8 @@ else
 
     private string Tooltip(SegmentStats s) =>
         $"{s.Name} — {SegmentAnalyzer.QuadrantName(s.Quadrant)}\n" +
-        $"Игр на itch.io: {(s.DenominatorEstimated ? "≈" : "")}{Fmt.N(s.Denominator)}\n" +
-        $"Медиана оценок (≥ {MinRatings}): {Fmt.N(s.Median, 0)}, сглаженная {Fmt.N(s.AdjMedian, 1)}\n" +
+        $"{(s.IncludesUnrated ? "Игр на itch.io" : "Игр с оценками")}: {(s.DenominatorEstimated ? "≈" : "")}{Fmt.N(s.Denominator)}\n" +
+        $"Типичные оценки (≥ {MinRatings}): {Fmt.N(s.Typical, 1)} · медиана {Fmt.N(s.Median, 0)}\n" +
         $"Шанс {Threshold}+ оценок: {Fmt.Pct(s.SuccessShare, 1)}\n" +
         $"Тренд: {(s.Trend is { } t ? Fmt.Signed(t * 100, 0, "%") : "—")}\n" +
         $"Opportunity: {Fmt.N(s.Opportunity, 0)}";

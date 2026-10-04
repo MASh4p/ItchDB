@@ -24,7 +24,9 @@ public static class Trends
             var q = Stats.QualifiedRatings(list, f.MinRatings);
             var successes = list.Count(g => g.Ratings >= p.SuccessThreshold);
             var rated = list.Count(g => g.Ratings > 0);
-            var denominator = total is { } t && t >= rated ? t : (int?)null;
+            int? denominator = f.IncludeUnrated
+                ? total is { } t && t >= rated ? t : null
+                : rated > 0 ? rated : null;
             result.Add(new YearPoint(y, total, list.Count, rated, q.Length, q.Length > 0 ? Stats.Median(q) : double.NaN,
                 successes, denominator is > 0 ? (double)successes / denominator.Value : null));
         }

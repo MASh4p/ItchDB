@@ -253,7 +253,8 @@ public sealed class CatalogIngestor(IDbContextFactory<ItchDbContext> dbFactory)
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var row = await db.ListingTotals.FirstOrDefaultAsync(x => x.Day == day && x.FilterKey == filterKey, ct);
         if (row is null) db.ListingTotals.Add(new ListingTotalSnapshot { Day = day, FilterKey = filterKey, Results = results });
-        else row.Results = results;
+        // The plain browse list hides part of an adult tag, so a later smaller count must not replace a larger one from the same day.
+        else if (results > row.Results) row.Results = results;
         await db.SaveChangesAsync(ct);
     }
 

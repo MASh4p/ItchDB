@@ -22,6 +22,11 @@
                        Label="18+" Class="mr-4" />
         </MudTooltip>
 
+        <MudTooltip Text="Включено: шанс успеха, конкуренция и ниши считаются по всем играм сегмента. Игры без оценок не скачиваются — в знаменатель берётся счётчик списка itch.io. Медиана по-прежнему только по играм с оценками, иначе она везде равна нулю. Выключено: те же показатели только среди игр, у которых есть хотя бы одна оценка.">
+            <MudSwitch T="bool" Value="Ui.IncludeUnrated" ValueChanged="@(v => Ui.IncludeUnrated = v)" Color="Color.Primary"
+                       Label="0 оценок" Class="mr-4" />
+        </MudTooltip>
+
         <MudTooltip Text="Медианы и доли считаются только по играм, у которых оценок не меньше порога. У 81% игр оценок нет, поэтому медиана по всем играм всегда 0.">
             <MudSelect T="int" Value="Ui.MinRatings" ValueChanged="@(v => Ui.MinRatings = v)" Dense="true"
                        Variant="Variant.Outlined" Margin="Margin.Dense" Label="Мин. оценок" Class="itch-min-select mr-3">

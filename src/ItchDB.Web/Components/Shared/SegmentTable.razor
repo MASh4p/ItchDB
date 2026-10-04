@@ -17,7 +17,7 @@
     <HeaderContent>
         <MudTh><MudTableSortLabel T="SegmentStats" SortBy="x => x.Name">Сегмент</MudTableSortLabel></MudTh>
         <MudTh Style="text-align:right">
-            <MudTableSortLabel T="SegmentStats" SortBy="x => x.Denominator">Игр на itch.io</MudTableSortLabel>
+            <MudTableSortLabel T="SegmentStats" SortBy="x => x.Denominator">@(Rows.FirstOrDefault()?.IncludesUnrated != false ? "Игр на itch.io" : "Игр с оценками")</MudTableSortLabel>
             <FormulaTip Title="@Formulas.Competition.Title" Formula="@Formulas.Competition.Formula" Text="@Formulas.Competition.Text" />
         </MudTh>
         <MudTh Style="text-align:right">

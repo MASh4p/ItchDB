@@ -173,10 +173,11 @@
         </MudPaper>
     </MudItem>
 
-    @foreach (var profile in new[] { CrawlProfile.QuickStart, CrawlProfile.Daily, CrawlProfile.Deep })
+    @foreach (var profile in new[] { CrawlProfile.QuickStart, CrawlProfile.Daily, CrawlProfile.Deep, CrawlProfile.GamePages })
     {
         var requests = CrawlPlanner.EstimateRequests(profile, Settings.Current);
-        <MudItem xs="12" md="4">
+        var allPages = profile == CrawlProfile.GamePages && Settings.Current.GamePagesPerRun <= 0;
+        <MudItem xs="12" md="6" lg="3">
             <MudCard Class="itch-card d-flex flex-column">
                 <MudCardHeader>
                     <CardHeaderAvatar>
@@ -184,7 +185,20 @@
                     </CardHeaderAvatar>
                     <CardHeaderContent>
                         <MudText Typo="Typo.h6">@CrawlProfiles.Name(profile)</MudText>
-                        <MudText Typo="Typo.caption" Class="itch-muted">до ~@Fmt.N(requests) запросов ≈ @Fmt.Duration(EstimateTime(requests))</MudText>
+                        <MudText Typo="Typo.caption" Class="itch-muted">
+                            @if (allPages)
+                            {
+                                <text>все игры без карточки, по одной странице</text>
+                                @if (_stats is { } left)
+                                {
+                                    <text> · осталось @Fmt.N(Math.Max(0, left.Games - left.GamesWithDetails))</text>
+                                }
+                            }
+                            else
+                            {
+                                <text>до ~@Fmt.N(requests) запросов ≈ @Fmt.Duration(EstimateTime(requests))</text>
+                            }
+                        </MudText>
                     </CardHeaderContent>
                 </MudCardHeader>
                 <MudCardContent Class="flex-grow-1 pt-0">
@@ -242,6 +256,7 @@
                         <tr><td>С оценками</td><td class="itch-num">@Fmt.N(s.RatedGames)</td></tr>
                         <tr><td>Загружены страницы (теги, даты, движок)</td><td class="itch-num">@Fmt.N(s.GamesWithDetails)</td></tr>
                         <tr><td>Всего на itch.io (по счётчику)</td><td class="itch-num">@Fmt.N(s.CatalogTotal)</td></tr>
+                        <tr><td>Счётчиков списков (тег, жанр, год…)</td><td class="itch-num">@Fmt.N(s.ListingCounters)</td></tr>
                         <tr><td>Разработчиков / с профилем</td><td class="itch-num">@Fmt.N(s.Developers) / @Fmt.N(s.DevelopersWithProfile)</td></tr>
                         <tr><td>Тегов и фильтров</td><td class="itch-num">@Fmt.N(s.Tags)</td></tr>
                         <tr><td>Джемов / с участниками</td><td class="itch-num">@Fmt.N(s.Jams) / @Fmt.N(s.JamsWithEntries) <span class="itch-muted">(@Fmt.N(s.JamEntries) заявок)</span></td></tr>
@@ -264,6 +279,7 @@
             <MudText Typo="Typo.body2" Class="itch-muted mb-3">
                 Список itch.io отдаёт максимум 200 страниц (7 200 игр). Поэтому глубокий сбор идёт по годам, а если оценённых игр за год больше —
                 дробит год по цене и жанрам. Год считается собранным, когда в топе по оценкам начинаются игры без оценок: все оценённые игры уже получены.
+                Общее число игр тега, жанра или года, включая проекты без оценок, читается со счётчика первой страницы и карточками не сохраняется.
             </MudText>
             @if (_stats is { } st)
             {
@@ -529,6 +545,7 @@
     {
         CrawlProfile.QuickStart => Icons.Material.Filled.RocketLaunch,
         CrawlProfile.Daily => Icons.Material.Filled.Today,
+        CrawlProfile.GamePages => Icons.Material.Filled.Web,
         _ => Icons.Material.Filled.Storage,
     };
 
@@ -541,11 +558,15 @@
                 $"Первые данные за полчаса: каталог тегов, топ по оценкам по всему itch.io, за два последних года, по 18 жанрам и {s.QuickTopTags} крупнейшим тегам; " +
                 $"позиции в popular, новые релизы, featured, {s.QuickDetails} страниц игр, профили и джемы. Статистика приблизительная — смещена к популярным играм, это отмечено меткой покрытия.",
             CrawlProfile.Daily =>
-                $"Раз в сутки или по кнопке «Обновить»: позиции в popular по {s.DailyPopularTags} тегам, отслеживаемые игры, свежие оценки топов, новые релизы, " +
+                $"Раз в сутки или по кнопке «Обновить»: счётчики списков, позиции в popular по {s.DailyPopularTags} тегам, отслеживаемые игры, свежие оценки топов, новые релизы, " +
                 $"{s.DailyDetails} страниц игр, {s.DailyProfiles} профилей, джемы и порция глубокого сбора. Ежедневные снимки дают тренды и «горячее».",
+            CrawlProfile.GamePages =>
+                "Только страницы игр: полные теги, дата выхода, движок, скриншоты и статус. Списки не качаются. " +
+                "Сначала игры с наибольшим числом оценок. Одна страница примерно раз в " +
+                $"{Fmt.N(s.GamePageIntervalMs / 1000.0, 0)} с. Остановка сохраняет прогресс, следующий запуск продолжит с оставшихся.",
             _ =>
-                $"Сначала страницы самых популярных игр (теги, даты, движок; без них не видны 2025 и 2026 годы), затем списки: годы, жанры, теги от {s.DeepMinTagProjects} проектов, движки и в конце 18+. " +
-                "Списки длиннее 200 страниц дробятся. Уже пройденное пропускается. Страницы игр качаются по одной в фоне, не пачкой.",
+                $"Сначала счётчики списков (сколько всего игр у тега или жанра, включая нули — сами такие игры не скачиваются), затем страницы самых популярных игр и списки: годы, жанры, теги от {s.DeepMinTagProjects} проектов, движки и в конце 18+. " +
+                "Списки длиннее 200 страниц дробятся. Уже пройденное пропускается. Страницы игр качаются по одной в фоне; полный проход — отдельной кнопкой «Карточки игр».",
         };
     }
 

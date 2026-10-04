@@ -31,6 +31,12 @@ public sealed class SegmentStats
     public double P90 { get; init; } = double.NaN;
     public double Mean { get; init; } = double.NaN;
     public double AdjMedian { get; init; }
+
+    /// <summary>
+    /// Shrunk geometric mean of qualified rating counts. Demand on the opportunity map:
+    /// an integer median piles every similar tag onto one horizontal line.
+    /// </summary>
+    public double Typical { get; init; }
     public double? MedianStars { get; init; }
     public long SumRatings { get; init; }
     public double? MedianComments { get; init; }
@@ -55,6 +61,8 @@ public sealed class SegmentStats
     public int EarlierSuccesses { get; init; }
 
     public bool RatedComplete { get; init; }
+    /// <summary>Denominator counts every game on itch.io, including those with zero ratings.</summary>
+    public bool IncludesUnrated { get; init; }
     public bool SmallSample { get; init; }
 
     public double? WebShare { get; init; }
@@ -105,6 +113,8 @@ public sealed class SegmentAnalyzer
 
         var qualified = Stats.QualifiedRatings(included, f.MinRatings);
         GlobalMedian = qualified.Length > 0 ? Stats.Median(qualified) : 0;
+        GlobalTypical = Stats.GeometricMean(qualified);
+        if (double.IsNaN(GlobalTypical)) GlobalTypical = 0;
         GlobalQualified = qualified.Length;
         AllRecentSuccesses = included.Count(IsRecentSuccess);
         AllEarlierSuccesses = included.Count(IsEarlierSuccess);
@@ -119,6 +129,7 @@ public sealed class SegmentAnalyzer
 
     public DateTime Now { get; }
     public double GlobalMedian { get; }
+    public double GlobalTypical { get; }
     public int GlobalQualified { get; }
     public int AllRecentSuccesses { get; }
     public int AllEarlierSuccesses { get; }
@@ -141,7 +152,22 @@ public sealed class SegmentAnalyzer
         if (seg.Kind == SegmentKind.All) totalItch ??= _d.CatalogTotal;
 
         var rated = games.Count(g => g.Ratings > 0);
-        var denominator = totalItch is { } ti && ti >= rated ? ti : games.Count;
+        var catalogCount = totalItch is { } ti && ti >= rated ? ti : (int?)null;
+        int denominator;
+        bool estimated;
+        bool includesUnrated;
+        if (_f.IncludeUnrated)
+        {
+            denominator = catalogCount ?? games.Count;
+            estimated = catalogCount is null;
+            includesUnrated = true;
+        }
+        else
+        {
+            denominator = rated > 0 ? rated : games.Count;
+            estimated = false;
+            includesUnrated = false;
+        }
         var successes = games.Count(g => g.Ratings >= _p.SuccessThreshold);
         var (low, high) = Stats.Wilson(successes, denominator);
 
@@ -175,7 +201,8 @@ public sealed class SegmentAnalyzer
             Known = games.Count,
             TotalItch = totalItch,
             Denominator = denominator,
-            DenominatorEstimated = totalItch is null,
+            DenominatorEstimated = estimated,
+            IncludesUnrated = includesUnrated,
             Rated = rated,
             Qualified = q.Length,
             Median = q.Length > 0 ? Stats.Median(q) : double.NaN,
@@ -184,6 +211,7 @@ public sealed class SegmentAnalyzer
             P90 = q.Length > 0 ? Stats.Quantile(q, 0.90) : double.NaN,
             Mean = q.Length > 0 ? q.Average() : double.NaN,
             AdjMedian = Stats.Shrink(q.Length > 0 ? Stats.Median(q) : double.NaN, q.Length, GlobalMedian, _p.ShrinkK),
+            Typical = Stats.Shrink(Stats.GeometricMean(q), q.Length, GlobalTypical, _p.ShrinkK),
             MedianStars = stars.Length > 0 ? Stats.Median(stars) : null,
             MedianComments = comments.Length > 0 ? Stats.Median(comments) : null,
             SumRatings = games.Sum(g => (long)g.Ratings),
@@ -191,7 +219,7 @@ public sealed class SegmentAnalyzer
             SuccessShare = denominator > 0 ? (double)successes / denominator : 0,
             SuccessLow = low,
             SuccessHigh = high,
-            Bin0 = Math.Max(0, denominator - rated),
+            Bin0 = catalogCount is { } catalog ? catalog - rated : games.Count(g => g.Ratings == 0),
             Bin1To4 = games.Count(g => g.Ratings is >= 1 and <= 4),
             Bin5To49 = games.Count(g => g.Ratings is >= 5 and <= 49),
             Bin50Plus = games.Count(g => g.Ratings >= 50),
@@ -218,13 +246,13 @@ public sealed class SegmentAnalyzer
 
     /// <summary>
     /// Opportunity 0..100 = weighted percentiles among segments with enough data:
-    /// demand (smoothed median ratings), success (Wilson lower bound of P(≥X)), low competition (fewer games), trend.
+    /// demand (shrunk geometric mean of ratings), success (Wilson lower bound of P(≥X)), low competition (fewer games), trend.
     /// </summary>
     public static void Rank(IReadOnlyList<SegmentStats> list, AnalyticsParams p)
     {
         var eligible = list.Where(s => !s.SmallSample).ToList();
         if (eligible.Count == 0) return;
-        var demand = Stats.Sorted(eligible.Select(s => s.AdjMedian));
+        var demand = Stats.Sorted(eligible.Select(s => s.Typical));
         var success = Stats.Sorted(eligible.Select(s => s.SuccessLow));
         var competition = Stats.Sorted(eligible.Select(s => Math.Log(1 + s.Denominator)));
         var trends = Stats.Sorted(eligible.Where(s => s.Trend is not null).Select(s => s.Trend!.Value));
@@ -233,7 +261,7 @@ public sealed class SegmentAnalyzer
 
         foreach (var s in eligible)
         {
-            s.DemandPct = Stats.PercentRank(demand, s.AdjMedian);
+            s.DemandPct = Stats.PercentRank(demand, s.Typical);
             s.SuccessPct = Stats.PercentRank(success, s.SuccessLow);
             s.CompetitionPct = Stats.PercentRank(competition, Math.Log(1 + s.Denominator));
             s.TrendPct = s.Trend is { } t && trends.Length >= 3 ? Stats.PercentRank(trends, t) : 0.5;

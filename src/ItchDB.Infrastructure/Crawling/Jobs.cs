@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Xml;
+using ItchDB.Core.Analytics;
 using ItchDB.Core.Catalog;
 using ItchDB.Core.Domain;
+using ItchDB.Infrastructure.Data;
 using ItchDB.Infrastructure.Http;
 using ItchDB.Infrastructure.Parsing;
 using Microsoft.EntityFrameworkCore;
@@ -139,6 +141,12 @@ public sealed class GameDetailsJob(int limit) : ICrawlJob
 
     public async Task RunAsync(CrawlContext ctx)
     {
+        if (limit <= 0)
+        {
+            await RunAllPendingAsync(ctx);
+            return;
+        }
+
         var queue = await SelectAsync(ctx, Math.Min(limit, ctx.RemainingBudget));
         int ok = 0, failed = 0;
         try
@@ -156,6 +164,75 @@ public sealed class GameDetailsJob(int limit) : ICrawlJob
         {
             ctx.Info($"Страницы игр: обработано {ok}, ошибок {failed}");
         }
+    }
+
+    /// <summary>
+    /// Walks every game that still has no page, highest rating first. A stopped run resumes:
+    /// a stored page is not selected again. Failures in this run are skipped so one HTTP 400
+    /// does not block the rest of the queue.
+    /// </summary>
+    private async Task RunAllPendingAsync(CrawlContext ctx)
+    {
+        int ok = 0, failed = 0, seen = 0;
+        var pending = await CountPendingAsync(ctx);
+        var skip = new HashSet<long>();
+        try
+        {
+            if (pending == 0)
+            {
+                ctx.Info("Страницы игр: у всех игр в базе уже есть карточка");
+                return;
+            }
+
+            ctx.Info($"Страницы игр: в очереди {pending}");
+            while (ctx.HasBudget)
+            {
+                var queue = await SelectPendingAsync(ctx, 80, skip);
+                if (queue.Count == 0) break;
+                foreach (var item in queue)
+                {
+                    if (!ctx.HasBudget) break;
+                    seen++;
+                    ctx.Step($"Игра {seen} из {pending}: {item.Url}", seen, pending);
+                    var fetched = await ctx.FetchAsync(item.Url, gamePage: true);
+                    if (await SaveOneAsync(ctx, item.Id, item.Url, fetched)) ok++;
+                    else
+                    {
+                        failed++;
+                        skip.Add(item.Id);
+                    }
+                }
+            }
+        }
+        finally
+        {
+            if (pending > 0)
+                ctx.Info($"Страницы игр: обработано {ok}, ошибок {failed}, осталось примерно {Math.Max(0, pending - ok)}");
+        }
+    }
+
+    private static async Task<int> CountPendingAsync(CrawlContext ctx)
+    {
+        await using var db = await ctx.Db.CreateDbContextAsync(ctx.Ct);
+        return await db.Games.CountAsync(g => !g.IsRemoved && g.DetailsFetchedAt == null && g.DetailsFailures < 3 && g.Url != "", ctx.Ct);
+    }
+
+    private static async Task<List<(long Id, string Url)>> SelectPendingAsync(CrawlContext ctx, int take, HashSet<long> skip)
+    {
+        await using var db = await ctx.Db.CreateDbContextAsync(ctx.Ct);
+        var q = db.Games.AsNoTracking()
+            .Where(g => !g.IsRemoved && g.DetailsFetchedAt == null && g.DetailsFailures < 3 && g.Url != "");
+        if (skip.Count > 0)
+        {
+            var ids = skip.ToList();
+            q = q.Where(g => !ids.Contains(g.Id));
+        }
+
+        var rows = await q.OrderByDescending(g => g.RatingCount ?? 0).ThenByDescending(g => g.FirstSeenAt)
+            .Select(g => new { g.Id, g.Url })
+            .Take(take)
+            .ToListAsync(ctx.Ct);
+        return rows.Select(x => (x.Id, x.Url)).ToList();
     }
 
     /// <returns>true when the page was stored.</returns>
@@ -438,5 +515,182 @@ public sealed class TrackedGamesJob : ICrawlJob
             }
         }
         return gameId;
+    }
+}
+
+/// <summary>
+/// Reads "(N results)" from the first page of each genre, tag, year and similar filter.
+/// Games with zero ratings are not downloaded: the number is enough for success rate and competition.
+/// </summary>
+public sealed class ListingTotalsJob(int tagLimit, int minProjects) : ICrawlJob
+{
+    private static readonly string[] FallbackEngines =
+    [
+        "made-with-unity", "made-with-godot", "made-with-renpy", "made-with-gamemaker", "made-with-construct",
+        "made-with-rpg-maker", "made-with-pico-8", "made-with-twine", "made-with-bitsy", "made-with-unreal-engine",
+        "made-with-gdevelop", "made-with-love2d",
+    ];
+
+    public string Title => "Счётчики списков (игры без оценок — только число)";
+
+    /// <summary>
+    /// The default list hides adult games and the nsfw filter is the other slice, so the two counts add up.
+    /// An adult tag is already shown on the default page: both counts then match and only the larger one is kept.
+    /// </summary>
+    internal static int? CombineBrowseTotals(int? plain, int? adult)
+    {
+        if (plain is not { } p) return adult;
+        if (adult is not { } a) return plain;
+        var larger = Math.Max(p, a);
+        var smaller = Math.Min(p, a);
+        return smaller * 100 >= larger * 90 ? larger : p + a;
+    }
+
+    /// <summary>The default list hides some adult games, so a count below the rated games already stored is incomplete.</summary>
+    internal static bool AdultListMayBeLarger(int? plain, int ratedLocal) =>
+        ratedLocal > 0 && (plain is null || plain < ratedLocal);
+
+    public async Task RunAsync(CrawlContext ctx)
+    {
+        var keys = await FilterKeysAsync(ctx);
+        var cutoff = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-Math.Max(0, ctx.Settings.DeepRefreshDays));
+        HashSet<string> fresh;
+        Dictionary<string, int> knownByTag;
+        await using (var db = await ctx.Db.CreateDbContextAsync(ctx.Ct))
+        {
+            fresh = (await db.ListingTotals.AsNoTracking()
+                .Where(t => t.Day >= cutoff)
+                .Select(t => t.FilterKey)
+                .Distinct()
+                .ToListAsync(ctx.Ct)).ToHashSet(StringComparer.Ordinal);
+            knownByTag = await KnownGamesByTagAsync(db, ctx.Ct);
+            var recent = await db.ListingTotals.AsNoTracking()
+                .Where(t => t.Day >= cutoff && t.FilterKey.StartsWith("tag-"))
+                .Select(t => new { t.FilterKey, t.Day, t.Results })
+                .ToListAsync(ctx.Ct);
+            foreach (var row in recent.Where(t => IsSingleTag(t.FilterKey)).GroupBy(t => t.FilterKey, StringComparer.Ordinal))
+            {
+                var stored = row.OrderByDescending(t => t.Day).First().Results;
+                if (knownByTag.TryGetValue(row.Key, out var known) && stored < known)
+                    fresh.Remove(row.Key);
+            }
+        }
+
+        var due = keys.Where(k => !fresh.Contains(k)).ToList();
+        int saved = 0, failed = 0, tooSmall = 0, done = 0;
+        for (var i = 0; i < due.Count && ctx.HasBudget; i++)
+        {
+            done++;
+            var key = due[i];
+            var spec = key.Length == 0 ? ListSpec.Of(ListSpec.Popular) : ListSpec.Of(ListSpec.Popular, key.Split('/'));
+            ctx.Step($"Счётчик {i + 1} из {due.Count}: {(key.Length == 0 ? "весь каталог" : key)}", i + 1, due.Count);
+            var plain = await ReadTotalAsync(ctx, spec);
+            var total = plain.Value;
+            var rated = IsSingleTag(key) && knownByTag.TryGetValue(key, out var known) ? known : 0;
+            var failedRead = plain.Failed && total is null;
+            if (IsSingleTag(key) && AdultListMayBeLarger(total, rated))
+            {
+                if (!ctx.HasBudget)
+                {
+                    tooSmall++;
+                    continue;
+                }
+                var adult = await ReadTotalAsync(ctx, ListSpec.Of(ListSpec.Popular, "nsfw", key));
+                failedRead = total is null && adult.Value is null && (plain.Failed || adult.Failed);
+                total = CombineBrowseTotals(total, adult.Value);
+            }
+
+            if (total is not { } n || AdultListMayBeLarger(n, rated))
+            {
+                if (failedRead) failed++;
+                else if (total is not null) tooSmall++;
+                continue;
+            }
+
+            await ctx.Ingest.SaveListingTotalAsync(ctx.Today, spec.FilterKey, n, ctx.Ct);
+            saved++;
+        }
+
+        var left = due.Count - done;
+        ctx.Info($"Счётчики списков: записано {saved}, свежие пропущены {keys.Count - due.Count}, ошибок {failed}" +
+                 (tooSmall > 0 ? $", меньше уже известных игр {tooSmall}" : "") +
+                 (left > 0 ? $", бюджет кончился — осталось {left}" : ""));
+    }
+
+    private static bool IsSingleTag(string key) => key.StartsWith("tag-", StringComparison.Ordinal) && !key.Contains('/');
+
+    private readonly record struct TotalRead(int? Value, bool Failed);
+
+    private static async Task<TotalRead> ReadTotalAsync(CrawlContext ctx, ListSpec spec)
+    {
+        var r = await ctx.FetchAsync(spec.Url(1, json: false));
+        if (r is null || !r.IsSuccess) return new(null, true);
+        if (r.IsNotFound || ListCrawler.IsRedirectedAway(r, spec))
+        {
+            ctx.Warn($"itch.io не поддерживает список {spec.Path}");
+            return new(null, false);
+        }
+
+        if (ListingParser.ParseHtml(r.Body).TotalResults is not { } n)
+        {
+            ctx.ParseError($"{spec.Path}: не найден счётчик results");
+            return new(null, true);
+        }
+
+        return new(n, false);
+    }
+
+    private static async Task<Dictionary<string, int>> KnownGamesByTagAsync(ItchDbContext db, CancellationToken ct)
+    {
+        var rows = await db.GameTags.AsNoTracking()
+            .Where(gt => gt.Tag!.Kind == TagKind.Tag)
+            .GroupBy(gt => gt.Tag!.Slug)
+            .Select(g => new { Slug = g.Key, Games = g.Count() })
+            .ToListAsync(ct);
+        return rows.ToDictionary(t => t.Slug, t => t.Games, StringComparer.Ordinal);
+    }
+
+    private async Task<List<string>> FilterKeysAsync(CrawlContext ctx)
+    {
+        var ordered = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        void Add(IEnumerable<string> items)
+        {
+            foreach (var key in items)
+                if (seen.Add(key)) ordered.Add(key);
+        }
+
+        Add([""]);
+        Add(ItchCatalog.Genres.Select(g => g.Slug));
+        Add((await CrawlMeta.AvailableYearsAsync(ctx.Cursors, ctx.Ct)).Select(y => $"year-{y}"));
+        Add(ItchCatalog.PlatformFilters.Select(p => p.Slug));
+        Add(ItchCatalog.Durations.Select(d => d.Slug));
+        Add(["free", "store", "nsfw"]);
+        Add(FallbackEngines);
+
+        await using var db = await ctx.Db.CreateDbContextAsync(ctx.Ct);
+        var facets = await db.Tags.AsNoTracking()
+            .Where(t => t.Kind != TagKind.Tag && t.Kind != TagKind.Other)
+            .Select(t => t.Slug)
+            .ToListAsync(ctx.Ct);
+        Add(facets);
+
+        if (tagLimit > 0)
+        {
+            var tags = db.Tags.AsNoTracking().Where(t => t.Kind == TagKind.Tag);
+            if (minProjects > 0)
+                tags = tags.Where(t => t.ProjectsCount != null && t.ProjectsCount >= minProjects);
+            Add(await tags.OrderByDescending(t => t.ProjectsCount).Select(t => t.Slug).Take(tagLimit).ToListAsync(ctx.Ct));
+
+            // Adult tags are left out of itch.io/tags, so ProjectsCount stays empty and the query above never selects them.
+            // Anything already shown in the tag table still needs a browse counter.
+            var visible = await db.Tags.AsNoTracking()
+                .Where(t => t.Kind == TagKind.Tag && t.Games.Count() >= AnalyticsSnapshot.MinTagMembers)
+                .Select(t => t.Slug)
+                .ToListAsync(ctx.Ct);
+            Add(visible);
+        }
+
+        return ordered;
     }
 }

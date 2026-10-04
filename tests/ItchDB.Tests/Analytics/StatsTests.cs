@@ -35,6 +35,15 @@ public class StatsTests
     }
 
     [Fact]
+    public void GeometricMean_SpreadsValuesThatShareAMedian()
+    {
+        Assert.Equal(2, Stats.GeometricMean([2, 2, 2, 2, 2]), 10);
+        Assert.True(Stats.GeometricMean([1, 1, 2, 4, 8]) > 2);
+        Assert.Equal(2, Stats.Median([1, 1, 2, 4, 8]));
+        Assert.True(double.IsNaN(Stats.GeometricMean([0, 0])));
+    }
+
+    [Fact]
     public void Shrink_PullsSmallSegmentsTowardGlobal()
     {
         Assert.Equal(3.6, Stats.Shrink(10, 5, 2, 20), 10);

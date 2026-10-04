@@ -189,6 +189,13 @@ public sealed class CrawlCoordinator
             var plan = CrawlPlanner.Build(profile, settings);
             var details = plan.Where(p => p.Job is GameDetailsJob).ToList();
             var main = plan.Where(p => p.Job is not GameDetailsJob).ToList();
+            // A run that only fetches game pages must stay in the foreground: the background queue is cancelled
+            // as soon as the list jobs finish, and here there are no list jobs.
+            if (main.Count == 0)
+            {
+                main = details;
+                details = [];
+            }
             JobCount = main.Count;
             var ctx = new CrawlContext(this, profile, http, _ingest, _cursors, _db, settings, plan.Sum(p => p.Budget), ct);
             _ctx = ctx;

@@ -99,11 +99,25 @@ public static class ConceptChecker
 
         var qualified = Stats.QualifiedRatings(similar, f.MinRatings);
         var rated = similar.Count(g => g.Ratings > 0);
-        var denominator = !relaxed && liveTotal is { } live && live >= rated ? live : similar.Count;
-        var estimated = denominator == similar.Count && (relaxed || liveTotal is null);
+        var catalogSize = !relaxed && liveTotal is { } live && live >= rated ? live : (int?)null;
+        int denominator;
+        bool estimated;
+        if (f.IncludeUnrated)
+        {
+            denominator = catalogSize ?? similar.Count;
+            estimated = catalogSize is null;
+        }
+        else
+        {
+            denominator = rated > 0 ? rated : similar.Count;
+            estimated = false;
+        }
 
         var allIncluded = d.Games.Where(f.Includes).ToList();
-        var catalogDen = d.CatalogTotal is { } ct && ct >= allIncluded.Count(g => g.Ratings > 0) ? ct : allIncluded.Count;
+        var ratedAll = allIncluded.Count(g => g.Ratings > 0);
+        var catalogDen = f.IncludeUnrated && d.CatalogTotal is { } ct && ct >= ratedAll ? ct
+            : f.IncludeUnrated ? allIncluded.Count
+            : ratedAll;
         var probabilities = Thresholds.Union([p.SuccessThreshold]).OrderBy(t => t).Select(t =>
         {
             var s = similar.Count(g => g.Ratings >= t);

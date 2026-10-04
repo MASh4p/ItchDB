@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddSingleton<RequestThrottle>();
         services.AddSingleton<CookieStore>();
         services.AddSingleton<BrowserFetcher>();
+        services.AddSingleton<LaunchProxy>();
 
         services.AddSingleton<CatalogIngestor>();
         services.AddSingleton<CursorStore>();
@@ -47,19 +48,19 @@ public static class DependencyInjection
         services.AddSingleton<AnalyticsService>();
         services.AddSingleton<DataQueries>();
 
-        services.AddHttpClient<ItchApiClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<ItchApiClient>(c => c.Timeout = TimeSpan.FromSeconds(30))
+            .ConfigurePrimaryHttpMessageHandler(CreateProxiedHandler);
 
         services.AddHttpClient<ItchHttpClient>(c => c.Timeout = Timeout.InfiniteTimeSpan)
-            .ConfigurePrimaryHttpMessageHandler(sp => new SocketsHttpHandler
+            .ConfigurePrimaryHttpMessageHandler(sp =>
             {
-                CookieContainer = sp.GetRequiredService<CookieStore>().Container,
-                UseCookies = true,
-                AutomaticDecompression = DecompressionMethods.All,
-                AllowAutoRedirect = true,
-                MaxAutomaticRedirections = 5,
-                PooledConnectionLifetime = TimeSpan.FromMinutes(10),
-                ConnectTimeout = TimeSpan.FromSeconds(30),
-                ConnectCallback = HostConnector.ConnectAsync,
+                var handler = CreateProxiedHandler(sp);
+                handler.CookieContainer = sp.GetRequiredService<CookieStore>().Container;
+                handler.UseCookies = true;
+                handler.AutomaticDecompression = DecompressionMethods.All;
+                handler.AllowAutoRedirect = true;
+                handler.MaxAutomaticRedirections = 5;
+                return handler;
             })
             .SetHandlerLifetime(Timeout.InfiniteTimeSpan)
             .AddResilienceHandler("itch", b =>
@@ -77,6 +78,15 @@ public static class DependencyInjection
 
         return services;
     }
+
+    /// <summary>Direct connection, or a tunnel through the proxy given by --proxy at launch.</summary>
+    private static SocketsHttpHandler CreateProxiedHandler(IServiceProvider sp) => new()
+    {
+        UseProxy = false,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+        ConnectTimeout = TimeSpan.FromSeconds(30),
+        ConnectCallback = (context, ct) => HostConnector.ConnectAsync(context, sp.GetRequiredService<LaunchProxy>().Address, ct),
+    };
 
     /// <summary>Reads the body for classification, leaving a fresh copy for the caller that consumes the response.</summary>
     private static string ReadBody(HttpResponseMessage response)
