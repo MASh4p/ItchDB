@@ -248,7 +248,9 @@ public sealed class GameDetailsJob(int limit) : ICrawlJob
         }
         if (!r.IsSuccess)
         {
-            if (r.StatusCode is not (400 or 401 or 408 or 429))
+            if (r.StatusCode == 429)
+                ctx.Warn($"{url}: проверка Cloudflare только на этой странице, пропускаю её и иду дальше");
+            else if (r.StatusCode is not (400 or 401 or 408))
                 await ctx.Ingest.MarkDetailsFailedAsync(id, removed: false, ctx.Ct);
             return false;
         }
@@ -265,6 +267,7 @@ public sealed class GameDetailsJob(int limit) : ICrawlJob
             return false;
         }
         await ctx.Ingest.IngestGameDetailsAsync(data, url, ctx.Ct);
+        ctx.CountGames(new IngestResult(0, 1));
         return true;
     }
 
@@ -557,11 +560,16 @@ public sealed class ListingTotalsJob(int tagLimit, int minProjects) : ICrawlJob
         var keys = await FilterKeysAsync(ctx);
         var cutoff = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-Math.Max(0, ctx.Settings.DeepRefreshDays));
         HashSet<string> fresh;
+        HashSet<string> everStored;
         Dictionary<string, int> knownByTag;
         await using (var db = await ctx.Db.CreateDbContextAsync(ctx.Ct))
         {
             fresh = (await db.ListingTotals.AsNoTracking()
                 .Where(t => t.Day >= cutoff)
+                .Select(t => t.FilterKey)
+                .Distinct()
+                .ToListAsync(ctx.Ct)).ToHashSet(StringComparer.Ordinal);
+            everStored = (await db.ListingTotals.AsNoTracking()
                 .Select(t => t.FilterKey)
                 .Distinct()
                 .ToListAsync(ctx.Ct)).ToHashSet(StringComparer.Ordinal);
@@ -573,12 +581,15 @@ public sealed class ListingTotalsJob(int tagLimit, int minProjects) : ICrawlJob
             foreach (var row in recent.Where(t => IsSingleTag(t.FilterKey)).GroupBy(t => t.FilterKey, StringComparer.Ordinal))
             {
                 var stored = row.OrderByDescending(t => t.Day).First().Results;
-                if (knownByTag.TryGetValue(row.Key, out var known) && stored < known)
+                if (knownByTag.TryGetValue(row.Key, out var known) && !SegmentStats.ListingTotalCovers(stored, known))
                     fresh.Remove(row.Key);
             }
         }
 
-        var due = keys.Where(k => !fresh.Contains(k)).ToList();
+        // Tags that have never had a counter go first, so a run that hits its request cap still fills the table.
+        var due = keys.Where(k => !fresh.Contains(k))
+            .OrderBy(k => everStored.Contains(k) ? 1 : 0)
+            .ToList();
         var saved = 0;
         var failed = 0;
         var tooSmall = 0;
@@ -604,7 +615,7 @@ public sealed class ListingTotalsJob(int tagLimit, int minProjects) : ICrawlJob
                 total = CombineBrowseTotals(total, adult.Value);
             }
 
-            if (total is not { } n || AdultListMayBeLarger(n, rated))
+            if (total is not { } n || (rated > 0 && !SegmentStats.ListingTotalCovers(n, rated)))
             {
                 if (failedRead) Interlocked.Increment(ref failed);
                 else if (total is not null) Interlocked.Increment(ref tooSmall);

@@ -80,7 +80,7 @@ public static class CrawlPlanner
         return
         [
             new(new TagCatalogJob(), 30),
-            new(new ListingTotalsJob(100, 0), TotalsBudget(100)),
+            new(new ListingTotalsJob(100, 0), TotalsBudget(100, coverShownTags: true)),
             new(new ListsJob("Позиции в popular и new-and-popular", async ctx =>
             {
                 var tasks = new List<ListTask>
@@ -122,7 +122,7 @@ public static class CrawlPlanner
     private static List<PlannedJob> Deep(AppSettingsModel s) =>
     [
         new(new TagCatalogJob(), 30),
-        new(new ListingTotalsJob(800, s.DeepMinTagProjects), TotalsBudget(800)),
+        new(new ListingTotalsJob(800, s.DeepMinTagProjects), TotalsBudget(800, coverShownTags: true)),
         new(new NewReleasesJob(40, stopAtKnown: false), 80),
         new(new GameDetailsJob(Math.Max(s.DeepDetails, 8_000)), Math.Max(s.DeepDetails, 8_000)),
         new(new ListsJob("Полный каталог по сегментам (годы → цена → жанр, теги, движки, 18+)", DeepBacklogAsync), CatalogBudget(s)),
@@ -166,8 +166,13 @@ public static class CrawlPlanner
     /// <summary>0 means every game that still has no page, capped so one run can be stopped and resumed.</summary>
     public static int GamePagesBudget(AppSettingsModel s) => s.GamePagesPerRun <= 0 ? 500_000 : s.GamePagesPerRun;
 
-    /// <summary>Fixed filters (catalog, genres, years, platforms, price) plus the requested tags.</summary>
-    private static int TotalsBudget(int tags) => 360 + Math.Max(0, tags);
+    /// <summary>
+    /// Fixed filters plus the requested tags. The job also queues every tag shown in the table,
+    /// and an adult tag may take a second request, so that backlog needs its own cap.
+    /// A short cap stops in the middle and leaves part of the table on an estimated count.
+    /// </summary>
+    private static int TotalsBudget(int tags, bool coverShownTags = false) =>
+        360 + Math.Max(0, tags) + (coverShownTags ? 8_000 : 0);
 
     private static readonly List<string> ExcludedTagSlugs = [.. ItchCatalog.NsfwTags, .. ItchCatalog.Genres.Select(g => g.Slug)];
 

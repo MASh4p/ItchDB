@@ -74,7 +74,7 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
             if (_navCount == 0)
             {
                 await _gate.WaitAsync(ct);
-                try { return await LoadOnTabAsync(_session!, url, ct); }
+                try { return await LoadOnTabAsync(_session!, url, ct, gamePage); }
                 finally { _gate.Release(); }
             }
 
@@ -83,7 +83,7 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
             lock (_pool) generation = _poolGeneration;
             try
             {
-                return await LoadOnTabAsync(tab, url, ct);
+                return await LoadOnTabAsync(tab, url, ct, gamePage);
             }
             finally
             {
@@ -104,7 +104,7 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         }
     }
 
-    private async Task<BrowserPage> LoadOnTabAsync(CdpSession tab, string url, CancellationToken ct)
+    private async Task<BrowserPage> LoadOnTabAsync(CdpSession tab, string url, CancellationToken ct, bool gamePage = false)
     {
         BrowserPage? page = null;
         if (IsDataUrl(url)) page = await FetchDataAsync(tab, url, ct);
@@ -126,6 +126,12 @@ public sealed class BrowserFetcher(DataPaths paths, CookieStore cookies, Network
         var loaded = page ?? throw new IOException("Страница не загрузилась");
         if (ItchHttpClient.IsChallengeBody(loaded.Body))
         {
+            // A single game page must not hold its tab for minutes: the card queue waits for every page in the batch.
+            if (gamePage)
+            {
+                log.LogWarning("Cloudflare check on game page {Url}; leaving it for a later run", url);
+                return loaded;
+            }
             status.SetNotice(SolveNotice);
             log.LogWarning("Cloudflare check in the Chrome window for {Url}. Waiting up to {Minutes} min for it to be solved", url, SolveTimeout.TotalMinutes);
             await SetWindowAsync(show: true, ct);

@@ -52,9 +52,10 @@
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Медиана оценок" Value="@Fmt.N(s.Median, 0)" Large="true"
-                         Hint="@($"сглаженная {Fmt.N(s.AdjMedian, 1)} · {Fmt.Times(_vm.VsAll)} к itch.io")"
-                         Formula="@Formulas.Median(F.MinRatings).Formula" Tip="@Formulas.Median(F.MinRatings).Text" />
+                    <Kpi Label="@(Ui.DemandUsesMean ? "Среднее оценок" : "Медиана оценок")" Value="@Fmt.N(Ui.DemandUsesMean ? s.Mean : s.Median, Ui.DemandUsesMean ? 1 : 0)" Large="true"
+                         Hint="@($"сглаженное {Fmt.N(Ui.DemandUsesMean ? s.AdjMean : s.AdjMedian, 1)} · {Fmt.Times(_vm.VsAll)} к itch.io")"
+                         Formula="@(Ui.DemandUsesMean ? Formulas.Mean(F.MinRatings).Formula : Formulas.Median(F.MinRatings).Formula)"
+                         Tip="@(Ui.DemandUsesMean ? Formulas.Mean(F.MinRatings).Text : Formulas.Median(F.MinRatings).Text)" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
@@ -96,7 +97,7 @@
                 </MudPaper>
                 <MudPaper Class="pa-4 mb-3" Outlined="true">
                     <div class="itch-section-title">По годам выхода</div>
-                    <SeriesChart Series="_vm.Years" Height="260" LeftTitle="Игр" RightTitle="Медиана оценок" />
+                    <SeriesChart Series="_vm.Years" Height="260" LeftTitle="Игр" RightTitle="Среднее оценок" />
                 </MudPaper>
                 @if (_vm.History.Count > 0)
                 {
@@ -139,9 +140,9 @@
                             {
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Href="@($"/tags/{Uri.EscapeDataString(tag.Slug)}")">
                                     @Segments.DisplayName(tag)
-                                    @if (stats is not null && !double.IsNaN(stats.Median))
+                                    @if (stats is not null && !double.IsNaN(Ui.DemandUsesMean ? stats.Mean : stats.Median))
                                     {
-                                        <span class="itch-muted ml-1">· @Fmt.N(stats.Median, 0)</span>
+                                        <span class="itch-muted ml-1">· @Fmt.N(Ui.DemandUsesMean ? stats.Mean : stats.Median, Ui.DemandUsesMean ? 1 : 0)</span>
                                     }
                                 </MudChip>
                             }
@@ -239,7 +240,9 @@
             .Where(t => F.ShowNsfw || !ItchCatalog.NsfwTags.Contains(t.Slug))
             .Select(t => (t, A.Segment(F, t.Slug))).ToList();
 
-        var vsAll = all.AdjMedian > 0 ? s.AdjMedian / all.AdjMedian : (double?)null;
+        var segDemand = Ui.DemandUsesMean ? s.AdjMean : s.AdjMedian;
+        var allDemand = Ui.DemandUsesMean ? all.AdjMean : all.AdjMedian;
+        var vsAll = allDemand > 0 ? segDemand / allDemand : (double?)null;
         var cohorts = A.Analyzer(F).TrendCohorts;
         var itchUrl = s.Segment.FilterKey is { Length: > 0 } filter ? $"{ItchCatalog.BaseUrl}/games/{filter}" : null;
 

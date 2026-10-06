@@ -36,7 +36,7 @@ else
 
     protected override void OnParametersSet()
     {
-        var key = ChartData.Key(Series) + Stacked;
+        var key = ChartData.Key(Series) + Stacked + ":" + string.Join(",", Series.Select(s => s.AxisDecimals));
         if (key == _key) return;
         _key = key;
         _options = ChartTheme.Options<ChartPoint>();
@@ -58,7 +58,7 @@ else
             SeriesName = s.SecondAxis ? firstRight : firstLeft,
             Opposite = s.SecondAxis,
             Show = s.Name == firstLeft || s.Name == firstRight,
-            DecimalsInFloat = Decimals,
+            DecimalsInFloat = s.AxisDecimals ?? Decimals,
             ForceNiceScale = true,
             Title = s.Name == firstLeft && LeftTitle is not null ? new AxisTitle { Text = LeftTitle }
                 : s.Name == firstRight && RightTitle is not null ? new AxisTitle { Text = RightTitle } : null,

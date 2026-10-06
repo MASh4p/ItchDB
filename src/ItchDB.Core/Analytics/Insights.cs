@@ -72,7 +72,7 @@ public static class InsightGenerator
             var zero = (double)all.Bin0 / all.Denominator;
             list.Add(new Insight("Большинство игр остаются незамеченными",
                 $"{RuFormat.Pct(zero)} из {RuFormat.N(total)} игр на itch.io не получили ни одной оценки, а {p.SuccessThreshold}+ оценок набрали лишь {RuFormat.Pct(all.SuccessShare, 1)}. " +
-                $"Поэтому медианы считаются по играм с ≥ {min} оценками: такая игра набирает в среднем {RuFormat.N(all.Median)} (P75 — {RuFormat.N(all.P75)}, P90 — {RuFormat.N(all.P90)}).",
+                $"Поэтому медианы считаются по играм с ≥ {min} оценками: такая игра набирает в среднем {RuFormat.N(all.Median)} (P75 — {RuFormat.N(all.P75, 1)}, P90 — {RuFormat.N(all.P90, 1)}).",
                 InsightTone.Info));
         }
 

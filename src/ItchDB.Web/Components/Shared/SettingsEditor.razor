@@ -136,6 +136,8 @@
         _m.DefaultMinRatings = current.DefaultMinRatings;
         _m.DefaultShowNsfw = current.DefaultShowNsfw;
         _m.DefaultIncludeUnrated = current.DefaultIncludeUnrated;
+        _m.SmallGameThreshold = current.SmallGameThreshold;
+        _m.DemandUsesMean = current.DemandUsesMean;
         await Settings.SaveAsync(_m);
         Revert();
         Snackbar.Add("Настройки сохранены", Severity.Success);

@@ -66,6 +66,12 @@ Cookie привязан к браузеру. User-Agent в настройках 
 dotnet run --project src/ItchDB.Web
 ```
 
+## Через прокси
+
+```bash
+dotnet run --project src/ItchDB.Web -- --proxy http://127.0.0.1:10809
+```
+
 Приложение откроется на http://localhost:5257. База SQLite, cookies, ключи и логи создаются в `src/ItchDB.Web/data`. Этот каталог в `.gitignore`.
 
 Другой каталог данных задаётся ключом `DataDirectory` (путь относительно проекта или абсолютный):

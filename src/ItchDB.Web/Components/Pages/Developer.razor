@@ -53,7 +53,7 @@
                         <MudPaper Class="pa-4" Outlined="true">
                             <div class="itch-section-title">Как читать показатели</div>
                             <table class="itch-kv" style="font-size:.85rem">
-                                <tr><td>Медиана</td><td>сколько оценок набирает типичная заметная игра (≥ @F.MinRatings оценок). Оценки ≈ аудитория: оценивает малая доля игроков.</td></tr>
+                                <tr><td>Медиана / среднее</td><td>сколько оценок набирает игра с ≥ @F.MinRatings оценками. Медиана часто равна 1–2 и слипает теги; «Среднее» рядом с таблицей и картой учитывает хиты и лучше их разделяет. Оценки ≈ аудитория: оценивает малая доля игроков.</td></tr>
                                 <tr><td>Шанс успеха</td><td>доля игр сегмента, набравших ≥ @A.Params.SuccessThreshold оценок. При включённом «0 оценок» знаменатель — весь список itch.io, включая игры без оценок.</td></tr>
                                 <tr><td>Конкуренция</td><td>сколько игр в сегменте. При включённом «0 оценок» — счётчик «(N results)», без скачивания самих игр без оценок.</td></tr>
                                 <tr><td>Тренд</td><td>как меняется доля сегмента среди успешных игр в новых когортах против старых.</td></tr>
@@ -73,6 +73,7 @@
                             <FormulaTip Title="@Formulas.Quadrant.Title" Formula="@Formulas.Quadrant.Formula" Text="@Formulas.Quadrant.Text" />
                         </div>
                         <MudSpacer />
+                        <SegmentFilters ShowHideSwitch="false" />
                         <MudChipSet T="string" @bind-SelectedValue="_mapSet" @bind-SelectedValue:after="OnMapSetChanged" SelectionMode="SelectionMode.SingleSelection" CheckMark="false" Size="Size.Small" SelectedColor="Color.Primary" Variant="Variant.Outlined">
                             <MudChip T="string" Value="@("tags")" Text="Теги" />
                             <MudChip T="string" Value="@("genres")" Text="Жанры" />
@@ -80,7 +81,8 @@
                             <MudChip T="string" Value="@("all")" Text="Всё вместе" />
                         </MudChipSet>
                     </div>
-                    <OpportunityMap Items="vm.MapItems" Threshold="A.Params.SuccessThreshold" MinRatings="F.MinRatings" />
+                    <OpportunityMap Items="vm.MapItems" Threshold="A.Params.SuccessThreshold" MinRatings="F.MinRatings"
+                                    MinGames="Ui.SmallGameThreshold" UseMean="Ui.DemandUsesMean" />
                 </MudPaper>
                 <MudGrid Spacing="3">
                     @foreach (var (quadrant, items) in vm.ByQuadrant)
@@ -93,7 +95,7 @@
                                 {
                                     <div class="d-flex align-center py-1" style="font-size:.86rem">
                                         <MudLink Href="@($"/tags/{Uri.EscapeDataString(s.Key)}")" Class="text-truncate" Style="flex:1;min-width:0">@s.Name</MudLink>
-                                        <span class="itch-muted mr-2">@Fmt.N(s.Median, 0)</span>
+                                        <span class="itch-muted mr-2">@Fmt.N(Ui.DemandUsesMean ? s.Mean : s.Median, Ui.DemandUsesMean ? 1 : 0)</span>
                                         <b class="itch-num">@Fmt.N(s.Opportunity, 0)</b>
                                     </div>
                                 }
@@ -120,14 +122,14 @@
                             <MudPaper Class="pa-4 itch-card" Outlined="true">
                                 <div class="itch-section-title">@group.Title</div>
                                 <MudSimpleTable Dense="true" Elevation="0" Style="background:transparent">
-                                    <thead><tr><th></th><th style="text-align:right">Медиана</th><th style="text-align:right">Шанс</th><th style="text-align:right">к itch.io</th></tr></thead>
+                                    <thead><tr><th></th><th style="text-align:right">@(Ui.DemandUsesMean ? "Среднее" : "Медиана")</th><th style="text-align:right">Шанс</th><th style="text-align:right">к itch.io</th></tr></thead>
                                     <tbody>
                                         @foreach (var s in group.Items)
                                         {
                                             var ratio = vm.All.SuccessShare > 0 ? s.SuccessShare / vm.All.SuccessShare : double.NaN;
                                             <tr>
                                                 <td><MudLink Href="@($"/tags/{Uri.EscapeDataString(s.Key)}")">@s.Name</MudLink></td>
-                                                <td class="itch-num" style="text-align:right">@Fmt.N(s.Median, 0)</td>
+                                                <td class="itch-num" style="text-align:right">@Fmt.N(Ui.DemandUsesMean ? s.Mean : s.Median, Ui.DemandUsesMean ? 1 : 0)</td>
                                                 <td class="itch-num" style="text-align:right">@(s.DenominatorEstimated ? "≈ " : "")@Fmt.Pct(s.SuccessShare, 1)</td>
                                                 <td class="itch-num" style="text-align:right;color:@(ratio >= 1.2 ? "#4CC38A" : ratio <= 0.8 ? "#FF8A8A" : "inherit")">@Fmt.Times(ratio)</td>
                                             </tr>
@@ -198,9 +200,11 @@
     protected override void Compute()
     {
         var all = A.All(F);
-        var genres = A.Genres(F);
-        var tags = A.Tags(F);
-        var formats = A.Formats(F);
+        var useMean = Ui.DemandUsesMean;
+        var minGames = Ui.SmallGameThreshold;
+        var genres = SegmentAnalyzer.WithDemand(A.Genres(F), A.Params, useMean);
+        var tags = SegmentAnalyzer.WithDemand(A.Tags(F), A.Params, useMean);
+        var formats = SegmentAnalyzer.WithDemand(A.Formats(F), A.Params, useMean);
         var drivers = A.Drivers(F);
 
         var topDrivers = drivers.Results.Where(r => r.Multiplier is not null && r.Significant && r.Group != "Витрина")
@@ -213,7 +217,12 @@
             "all" => genres.Concat(tags).Concat(formats).ToList(),
             _ => tags,
         };
-        var mapItems = mapSource.Where(s => !s.SmallSample && s.Opportunity is not null).ToList();
+        var mapItems = mapSource
+            .Where(s => s.Qualified >= minGames && s.Denominator > 0)
+            .Select(s => s.Clone())
+            .ToList();
+        SegmentAnalyzer.Rank(mapItems, A.Params, byMean: useMean, minQualified: minGames);
+        mapItems = mapItems.Where(s => s.Opportunity is not null && (useMean ? s.AdjMean : s.Typical) > 0).ToList();
 
         var byQuadrant = new[] { Quadrant.BlueOcean, Quadrant.RedOcean, Quadrant.QuietNiche, Quadrant.Trap }
             .Select(q => (q, mapItems.Where(s => s.Quadrant == q).OrderByDescending(s => s.Opportunity).Take(8).ToList()))
@@ -222,7 +231,7 @@
         var niches = genres.Concat(tags).OrderByDescending(s => s.Opportunity ?? -1).ToList();
 
         var groups = formats.GroupBy(s => s.Segment.Kind)
-            .Select(g => new FormatGroup(Segments.KindName(g.Key), g.Where(s => s.Known > 0 && !s.SmallSample).OrderByDescending(s => s.SuccessShare).ToList()))
+            .Select(g => new FormatGroup(Segments.KindName(g.Key), g.Where(s => s.Known > 0 && s.Qualified >= minGames).OrderByDescending(s => s.SuccessShare).ToList()))
             .Where(g => g.Items.Count > 0)
             .ToList();
 

@@ -32,6 +32,9 @@ public sealed class SegmentStats
     public double Mean { get; init; } = double.NaN;
     public double AdjMedian { get; init; }
 
+    /// <summary>Arithmetic mean of qualified rating counts, shrunk toward the catalog mean. Separates tags that share a median of 1 or 2.</summary>
+    public double AdjMean { get; init; }
+
     /// <summary>
     /// Shrunk geometric mean of qualified rating counts. Demand on the opportunity map:
     /// an integer median piles every similar tag onto one horizontal line.
@@ -79,6 +82,15 @@ public sealed class SegmentStats
 
     public string Key => Segment.Key;
     public string Name => Segment.Name;
+
+    public SegmentStats Clone() => (SegmentStats)MemberwiseClone();
+
+    /// <summary>
+    /// A browse counter a game or two below the local list still counts: a title can leave the public list.
+    /// A larger gap means the adult slice was not included, and the number is not the real size.
+    /// </summary>
+    public static bool ListingTotalCovers(int total, int localGames) =>
+        localGames <= total || localGames - total <= 2;
 }
 
 /// <summary>
@@ -113,6 +125,7 @@ public sealed class SegmentAnalyzer
 
         var qualified = Stats.QualifiedRatings(included, f.MinRatings);
         GlobalMedian = qualified.Length > 0 ? Stats.Median(qualified) : 0;
+        GlobalMean = qualified.Length > 0 ? qualified.Average() : 0;
         GlobalTypical = Stats.GeometricMean(qualified);
         if (double.IsNaN(GlobalTypical)) GlobalTypical = 0;
         GlobalQualified = qualified.Length;
@@ -129,6 +142,7 @@ public sealed class SegmentAnalyzer
 
     public DateTime Now { get; }
     public double GlobalMedian { get; }
+    public double GlobalMean { get; }
     public double GlobalTypical { get; }
     public int GlobalQualified { get; }
     public int AllRecentSuccesses { get; }
@@ -152,7 +166,7 @@ public sealed class SegmentAnalyzer
         if (seg.Kind == SegmentKind.All) totalItch ??= _d.CatalogTotal;
 
         var rated = games.Count(g => g.Ratings > 0);
-        var catalogCount = totalItch is { } ti && ti >= rated ? ti : (int?)null;
+        int? catalogCount = totalItch is { } ti && SegmentStats.ListingTotalCovers(ti, rated) ? Math.Max(ti, rated) : null;
         int denominator;
         bool estimated;
         bool includesUnrated;
@@ -211,6 +225,7 @@ public sealed class SegmentAnalyzer
             P90 = q.Length > 0 ? Stats.Quantile(q, 0.90) : double.NaN,
             Mean = q.Length > 0 ? q.Average() : double.NaN,
             AdjMedian = Stats.Shrink(q.Length > 0 ? Stats.Median(q) : double.NaN, q.Length, GlobalMedian, _p.ShrinkK),
+            AdjMean = Stats.Shrink(q.Length > 0 ? q.Average() : double.NaN, q.Length, GlobalMean, _p.ShrinkK),
             Typical = Stats.Shrink(Stats.GeometricMean(q), q.Length, GlobalTypical, _p.ShrinkK),
             MedianStars = stars.Length > 0 ? Stats.Median(stars) : null,
             MedianComments = comments.Length > 0 ? Stats.Median(comments) : null,
@@ -248,11 +263,31 @@ public sealed class SegmentAnalyzer
     /// Opportunity 0..100 = weighted percentiles among segments with enough data:
     /// demand (shrunk geometric mean of ratings), success (Wilson lower bound of P(≥X)), low competition (fewer games), trend.
     /// </summary>
-    public static void Rank(IReadOnlyList<SegmentStats> list, AnalyticsParams p)
+    public static List<SegmentStats> WithDemand(List<SegmentStats> rows, AnalyticsParams p, bool useMean)
     {
-        var eligible = list.Where(s => !s.SmallSample).ToList();
+        if (!useMean) return rows;
+        var copy = rows.Select(s => s.Clone()).ToList();
+        Rank(copy, p, byMean: true);
+        return copy;
+    }
+
+    /// <summary>Assigns opportunity and quadrant among segments that have enough games.</summary>
+    /// <param name="byMean">Demand percentile uses the shrunk arithmetic mean instead of the geometric mean.</param>
+    /// <param name="minQualified">When set, this sample floor replaces <see cref="SegmentStats.SmallSample"/>.</param>
+    public static void Rank(IReadOnlyList<SegmentStats> list, AnalyticsParams p, bool byMean = false, int? minQualified = null)
+    {
+        if (minQualified is int floor)
+        {
+            foreach (var s in list.Where(s => s.Qualified < floor))
+            {
+                s.Opportunity = null;
+                s.Quadrant = Quadrant.None;
+            }
+        }
+        var eligible = list.Where(s => minQualified is int q ? s.Qualified >= q : !s.SmallSample).ToList();
         if (eligible.Count == 0) return;
-        var demand = Stats.Sorted(eligible.Select(s => s.Typical));
+        double DemandOf(SegmentStats s) => byMean ? s.AdjMean : s.Typical;
+        var demand = Stats.Sorted(eligible.Select(DemandOf));
         var success = Stats.Sorted(eligible.Select(s => s.SuccessLow));
         var competition = Stats.Sorted(eligible.Select(s => Math.Log(1 + s.Denominator)));
         var trends = Stats.Sorted(eligible.Where(s => s.Trend is not null).Select(s => s.Trend!.Value));
@@ -261,7 +296,7 @@ public sealed class SegmentAnalyzer
 
         foreach (var s in eligible)
         {
-            s.DemandPct = Stats.PercentRank(demand, s.Typical);
+            s.DemandPct = Stats.PercentRank(demand, DemandOf(s));
             s.SuccessPct = Stats.PercentRank(success, s.SuccessLow);
             s.CompetitionPct = Stats.PercentRank(competition, Math.Log(1 + s.Denominator));
             s.TrendPct = s.Trend is { } t && trends.Length >= 3 ? Stats.PercentRank(trends, t) : 0.5;

@@ -22,7 +22,7 @@ public sealed class ItchHttpClientTests : IDisposable
         var factory = new FileDbFactory(paths.ConnectionString);
         using (var db = factory.CreateDbContext()) db.Database.EnsureCreated();
         var settings = new SettingsService(factory, new EphemeralDataProtectionProvider());
-        settings.SaveAsync(new AppSettingsModel { RequestIntervalMs = 0, RequestJitterMs = 0, CloudflarePauseMinutes = [10, 20] }).GetAwaiter().GetResult();
+        settings.SaveAsync(new AppSettingsModel { RequestIntervalMs = 0, GamePageIntervalMs = 0, RequestJitterMs = 0, CloudflarePauseMinutes = [10, 20] }).GetAwaiter().GetResult();
         _client = new ItchHttpClient(new HttpClient(_handler), new RequestThrottle(settings), _status,
             new CookieStore(paths, NullLogger<CookieStore>.Instance), settings, NullLogger<ItchHttpClient>.Instance);
     }
@@ -67,6 +67,24 @@ public sealed class ItchHttpClientTests : IDisposable
         await Assert.ThrowsAsync<CloudflareBlockedException>(() => _client.GetNowAsync(Url, CancellationToken.None));
 
         Assert.Equal(1, _handler.Calls);
+    }
+
+    [Fact]
+    public async Task GamePageChallenge_SkipsThatPageUntilSeveralArriveInARow()
+    {
+        _handler.Challenge = true;
+
+        for (var i = 1; i <= 3; i++)
+        {
+            var result = await _client.GetAsync(Url, CancellationToken.None, gamePage: true);
+            Assert.Equal(429, result.StatusCode);
+            Assert.False(_status.IsPaused);
+            Assert.Equal(i, _status.ConsecutiveGamePageChallenges);
+        }
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _client.GetAsync(Url, cts.Token, gamePage: true));
+        Assert.True(_status.IsPaused);
     }
 
     [Fact]

@@ -37,9 +37,10 @@
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Медиана оценок" Value="@Fmt.N(vm.All.Median, 0)" Large="true"
+                    <Kpi Label="@(Ui.DemandUsesMean ? "Среднее оценок" : "Медиана оценок")" Value="@Fmt.N(Ui.DemandUsesMean ? vm.All.Mean : vm.All.Median, Ui.DemandUsesMean ? 1 : 0)" Large="true"
                          Hint="@($"по {Fmt.N(vm.All.Qualified)} играм с ≥ {F.MinRatings}")"
-                         Formula="@Formulas.Median(F.MinRatings).Formula" Tip="@Formulas.Median(F.MinRatings).Text" />
+                         Formula="@(Ui.DemandUsesMean ? Formulas.Mean(F.MinRatings).Formula : Formulas.Median(F.MinRatings).Formula)"
+                         Tip="@(Ui.DemandUsesMean ? Formulas.Mean(F.MinRatings).Text : Formulas.Median(F.MinRatings).Text)" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
@@ -85,9 +86,9 @@
                 <MudPaper Class="pa-4" Outlined="true">
                     <div class="itch-section-title">
                         По годам выхода
-                        <FormulaTip Title="Когорты по годам" Text="Старые игры успели накопить больше оценок, поэтому сравнивайте форму, а не уровни. Для лет без фильтра года на itch.io показаны только собранные игры." />
+                        <FormulaTip Title="Когорты по годам" Text="Линия — среднее число оценок у игр с порогом из шапки. Медиана года почти всегда 1 или 2 и не различает когорты. Старые игры успели накопить больше оценок, поэтому сравнивайте форму, а не уровни." />
                     </div>
-                    <SeriesChart Series="vm.Years" Height="280" LeftTitle="Игр" RightTitle="Медиана оценок" />
+                    <SeriesChart Series="vm.Years" Height="280" LeftTitle="Игр" RightTitle="Среднее оценок" />
                     @if (vm.WithYear < vm.Known * 0.8)
                     {
                         <MudText Typo="Typo.caption" Class="itch-muted">
@@ -103,9 +104,11 @@
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
                     <div class="itch-section-title">
                         Жанры: спрос
-                        <FormulaTip Title="@Formulas.AdjMedian.Title" Formula="@Formulas.AdjMedian.Formula" Text="@Formulas.AdjMedian.Text" />
+                        <FormulaTip Title="@(Ui.DemandUsesMean ? Formulas.AdjMean.Title : Formulas.AdjMedian.Title)"
+                                    Formula="@(Ui.DemandUsesMean ? Formulas.AdjMean.Formula : Formulas.AdjMedian.Formula)"
+                                    Text="@(Ui.DemandUsesMean ? Formulas.AdjMean.Text : Formulas.AdjMedian.Text)" />
                     </div>
-                    <BarChart Items="vm.Genres" Name="Сглаженная медиана оценок" Horizontal="true" Height="440" Decimals="1" Color="#5CC8FA" />
+                    <BarChart Items="vm.Genres" Name="@(Ui.DemandUsesMean ? "Сглаженное среднее" : "Сглаженная медиана")" Horizontal="true" Height="440" Decimals="1" Color="#5CC8FA" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" md="6">
@@ -120,7 +123,7 @@
                         <div class="d-flex align-center py-1">
                             <MudLink Href="@($"/tags/{Uri.EscapeDataString(s.Key)}")" Style="min-width:0" Class="text-truncate">@s.Name</MudLink>
                             <MudSpacer />
-                            <span class="itch-muted mr-3" style="font-size:.8rem">медиана @Fmt.N(s.Median, 0) · игр @Fmt.Short(s.Denominator)</span>
+                            <span class="itch-muted mr-3" style="font-size:.8rem">@(Ui.DemandUsesMean ? "среднее" : "медиана") @Fmt.N(Ui.DemandUsesMean ? s.Mean : s.Median, Ui.DemandUsesMean ? 1 : 0) · игр @Fmt.Short(s.Denominator)</span>
                             <QuadrantChip Value="s.Quadrant" />
                             <span class="itch-num ml-3" style="width:28px;text-align:right"><b>@Fmt.N(s.Opportunity, 0)</b></span>
                         </div>
@@ -189,10 +192,13 @@
         var yearSeries = ChartData.Years(years);
         var withYear = games.Count(g => g.Year is not null);
 
-        var genres = A.Genres(F).Where(s => s.Qualified > 0).OrderByDescending(s => s.AdjMedian)
-            .Select(s => new ChartPoint(s.Name, s.AdjMedian)).ToList();
+        var useMean = Ui.DemandUsesMean;
+        var genres = SegmentAnalyzer.WithDemand(A.Genres(F), A.Params, useMean).Where(s => s.Qualified > 0)
+            .OrderByDescending(s => useMean ? s.AdjMean : s.AdjMedian)
+            .Select(s => new ChartPoint(s.Name, useMean ? s.AdjMean : s.AdjMedian)).ToList();
 
-        var niches = A.Tags(F).Where(s => s.Opportunity is not null).OrderByDescending(s => s.Opportunity).Take(7).ToList();
+        var niches = SegmentAnalyzer.WithDemand(A.Tags(F), A.Params, useMean)
+            .Where(s => s.Opportunity is not null).OrderByDescending(s => s.Opportunity).Take(7).ToList();
 
         var hotAvailable = games.Any(g => g.Hot > 0);
         var top = hotAvailable

@@ -24,6 +24,10 @@ public sealed class AppSettingsModel
     public bool DefaultShowNsfw { get; set; }
     /// <summary>Success and competition use the itch.io list counter, including games with zero ratings.</summary>
     public bool DefaultIncludeUnrated { get; set; } = true;
+    /// <summary>A segment is hidden as small when fewer games than this have enough ratings. 0 follows MinSegmentSample. The opportunity map uses the same cutoff.</summary>
+    public int SmallGameThreshold { get; set; }
+    /// <summary>The segment table and the opportunity map show the arithmetic mean instead of the median.</summary>
+    public bool DemandUsesMean { get; set; }
 
     // Analytics
     public int SuccessThreshold { get; set; } = 10;

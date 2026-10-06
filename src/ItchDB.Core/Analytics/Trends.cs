@@ -2,7 +2,7 @@ using ItchDB.Core.Catalog;
 
 namespace ItchDB.Core.Analytics;
 
-public sealed record YearPoint(int Year, int? TotalItch, int Known, int Rated, int Qualified, double Median, int Successes, double? SuccessShare);
+public sealed record YearPoint(int Year, int? TotalItch, int Known, int Rated, int Qualified, double Median, int Successes, double? SuccessShare, double Mean);
 
 public sealed record MonthPoint(DateOnly Month, int Releases, int Qualified, double Median, int Successes);
 
@@ -28,7 +28,8 @@ public static class Trends
                 ? total is { } t && t >= rated ? t : null
                 : rated > 0 ? rated : null;
             result.Add(new YearPoint(y, total, list.Count, rated, q.Length, q.Length > 0 ? Stats.Median(q) : double.NaN,
-                successes, denominator is > 0 ? (double)successes / denominator.Value : null));
+                successes, denominator is > 0 ? (double)successes / denominator.Value : null,
+                q.Length > 0 ? q.Average() : double.NaN));
         }
         return result;
     }

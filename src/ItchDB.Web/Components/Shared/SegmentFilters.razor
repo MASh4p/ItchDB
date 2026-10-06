@@ -1,0 +1,43 @@
+@inject UiState Ui
+@* Threshold for "hide small" and the median/mean switch. Both are shared with the opportunity map. *@
+
+@if (ShowHideSwitch)
+{
+    <MudSwitch T="bool" Value="HideSmall" ValueChanged="HideSmallChanged" Color="Color.Primary" Label="Скрыть малые" Class="mr-1" />
+}
+<MudNumericField T="int" Value="Ui.SmallGameThreshold" ValueChanged="OnThreshold" Min="1" Max="100000" HideSpinButtons="true"
+                 Variant="Variant.Outlined" Margin="Margin.Dense" Label="Порог, игр" Class="itch-threshold mr-1" />
+<MudTooltip Text="Тег считается малым, если игр с оценками меньше порога. Тот же порог убирает точки с карты возможностей." Arrow="true">
+    <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" Class="itch-tip-icon mr-2" />
+</MudTooltip>
+<MudChipSet T="string" @bind-SelectedValue="_demand" @bind-SelectedValue:after="CommitDemand" SelectionMode="SelectionMode.SingleSelection"
+            CheckMark="false" Size="Size.Small" SelectedColor="Color.Primary" Variant="Variant.Outlined" Class="mr-2">
+    <MudChip T="string" Value="@("median")" Text="Медиана" />
+    <MudChip T="string" Value="@("mean")" Text="Среднее" />
+</MudChipSet>
+
+@code {
+    [Parameter] public bool ShowHideSwitch { get; set; } = true;
+    [Parameter] public bool HideSmall { get; set; }
+    [Parameter] public EventCallback<bool> HideSmallChanged { get; set; }
+
+    private string _demand = "median";
+
+    protected override void OnParametersSet()
+    {
+        var key = Ui.DemandUsesMean ? "mean" : "median";
+        if (_demand != key) _demand = key;
+    }
+
+    private void OnThreshold(int value) => Ui.SmallGameThreshold = value;
+
+    private void CommitDemand()
+    {
+        if (_demand is not ("mean" or "median"))
+        {
+            _demand = Ui.DemandUsesMean ? "mean" : "median";
+            return;
+        }
+        Ui.DemandUsesMean = _demand == "mean";
+    }
+}

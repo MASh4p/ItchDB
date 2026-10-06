@@ -44,6 +44,13 @@ public sealed class ItchHttpClient(
             await status.WaitWhilePausedAsync(ct);
             var (result, challenge) = await SendThrottledAsync(url, accept, ct, gamePage);
             if (!challenge) return result;
+            // One protected game page must not freeze the card queue. A streak means the session itself is blocked.
+            if (gamePage && status.NoteGamePageChallenge() < 4)
+            {
+                status.SetNotice(null);
+                log.LogWarning("Cloudflare on game page {Url}; skipping it and continuing", url);
+                return new FetchResult(429, "", result.Url);
+            }
             if (OnChallenge(url) is null) throw new CloudflareBlockedException(BlockedMessage);
             await status.WaitWhilePausedAsync(ct);
         }

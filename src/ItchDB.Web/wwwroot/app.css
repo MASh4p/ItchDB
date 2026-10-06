@@ -193,6 +193,22 @@ a:hover {
     margin-top: 0 !important;
 }
 
+.itch-threshold {
+    width: 118px;
+    min-width: 118px;
+    flex: 0 0 auto;
+    margin-top: 0 !important;
+}
+
+.itch-threshold .mud-input-control-input-container {
+    margin-top: 0;
+}
+
+.itch-table .mud-table-toolbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+}
+
 .itch-table .mud-table-cell {
     padding-top: 6px;
     padding-bottom: 6px;

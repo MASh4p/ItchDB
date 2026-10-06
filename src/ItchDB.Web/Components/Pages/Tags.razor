@@ -18,8 +18,8 @@
                 <MudGrid Spacing="3" Class="mb-2">
                     <MudItem xs="12" md="6">
                         <MudPaper Class="pa-4" Outlined="true">
-                            <div class="itch-section-title">Спрос: сглаженная медиана оценок</div>
-                            <BarChart Items="vm.GenreDemand" Name="Сглаженная медиана" Horizontal="true" Height="420" Decimals="1" Color="#5CC8FA" />
+                            <div class="itch-section-title">@(Ui.DemandUsesMean ? "Спрос: сглаженное среднее оценок" : "Спрос: сглаженная медиана оценок")</div>
+                            <BarChart Items="vm.GenreDemand" Name="@(Ui.DemandUsesMean ? "Сглаженное среднее" : "Сглаженная медиана")" Horizontal="true" Height="420" Decimals="1" Color="#5CC8FA" />
                         </MudPaper>
                     </MudItem>
                     <MudItem xs="12" md="6">
@@ -109,16 +109,17 @@
 
     protected override void Compute()
     {
-        var genres = A.Genres(F);
+        var useMean = Ui.DemandUsesMean;
+        var genres = SegmentAnalyzer.WithDemand(A.Genres(F), A.Params, useMean);
         var nsfwOk = (TagRow t) => F.ShowNsfw || !ItchCatalog.NsfwTags.Contains(t.Slug);
         _vm = new Vm(
             genres,
-            A.Tags(F),
-            A.Engines(F),
-            A.Formats(F),
+            SegmentAnalyzer.WithDemand(A.Tags(F), A.Params, useMean),
+            SegmentAnalyzer.WithDemand(A.Engines(F), A.Params, useMean),
+            SegmentAnalyzer.WithDemand(A.Formats(F), A.Params, useMean),
             A.Languages(F),
             D.Tags.Values.Where(t => t.ProjectsCount is not null && nsfwOk(t)).ToList(),
-            genres.Where(s => s.Qualified > 0).OrderByDescending(s => s.AdjMedian).Select(s => new ChartPoint(s.Name, s.AdjMedian)).ToList(),
+            genres.Where(s => s.Qualified > 0).OrderByDescending(s => useMean ? s.AdjMean : s.AdjMedian).Select(s => new ChartPoint(s.Name, useMean ? s.AdjMean : s.AdjMedian)).ToList(),
             genres.OrderByDescending(s => s.Denominator).Select(s => new ChartPoint(s.Name, s.Denominator)).ToList(),
             A.Analyzer(F).TrendCohorts);
     }

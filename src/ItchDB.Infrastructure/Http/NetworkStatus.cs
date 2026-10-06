@@ -16,6 +16,7 @@ public sealed class NetworkStatus
 
     public DateTime? PausedUntil { get; private set; }
     public int ConsecutiveChallenges { get; private set; }
+    public int ConsecutiveGamePageChallenges { get; private set; }
     public int ConsecutiveHttp400 { get; private set; }
     public int ConsecutiveConnectionFailures { get; private set; }
     public DateTime? LastChallengeAt { get; private set; }
@@ -48,15 +49,27 @@ public sealed class NetworkStatus
 
     internal void RecordSuccess()
     {
-        if (ConsecutiveChallenges == 0 && ConsecutiveHttp400 == 0 && ConsecutiveConnectionFailures == 0 && !IsBlocked) return;
+        if (ConsecutiveChallenges == 0 && ConsecutiveGamePageChallenges == 0 && ConsecutiveHttp400 == 0 && ConsecutiveConnectionFailures == 0 && !IsBlocked) return;
         lock (_gate)
         {
             ConsecutiveChallenges = 0;
+            ConsecutiveGamePageChallenges = 0;
             ConsecutiveHttp400 = 0;
             ConsecutiveConnectionFailures = 0;
             IsBlocked = false;
         }
         Changed?.Invoke();
+    }
+
+    /// <summary>A challenge on one game page. The crawl skips that page until several arrive in a row.</summary>
+    internal int NoteGamePageChallenge()
+    {
+        lock (_gate)
+        {
+            ConsecutiveGamePageChallenges++;
+            LastChallengeAt = DateTime.UtcNow;
+            return ConsecutiveGamePageChallenges;
+        }
     }
 
     internal int RecordChallenge()
@@ -168,6 +181,7 @@ public sealed class NetworkStatus
             PausedUntil = null;
             IsBlocked = false;
             ConsecutiveChallenges = 0;
+            ConsecutiveGamePageChallenges = 0;
             ConsecutiveHttp400 = 0;
             ConsecutiveConnectionFailures = 0;
             Notice = null;

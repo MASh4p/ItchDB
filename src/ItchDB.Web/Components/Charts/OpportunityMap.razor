@@ -46,10 +46,18 @@ else
         }
 
         <text x="@((L + W - R) / 2)" y="@(H - 6)" text-anchor="middle" class="itch-map-axis">Конкуренция: игр в сегменте на itch.io (лог. шкала) →</text>
-        <text x="14" y="@((T + H - B) / 2)" text-anchor="middle" class="itch-map-axis" transform="rotate(-90 14 @((T + H - B) / 2))">Спрос: типичные оценки →</text>
+        <text x="14" y="@((T + H - B) / 2)" text-anchor="middle" class="itch-map-axis" transform="rotate(-90 14 @((T + H - B) / 2))">@(UseMean ? "Спрос: среднее число оценок →" : "Спрос: типичные оценки →")</text>
     </svg>
     <MudText Typo="Typo.caption" Class="itch-muted">
-        Высота — типичное число оценок: геометрическое среднее игр с ≥ @MinRatings оценками, сглаженное к itch.io. Пунктир — медианы среди показанных сегментов. Размер точки — шанс набрать @Threshold+ оценок. Клик по точке открывает страницу сегмента.
+        @if (UseMean)
+        {
+            <text>Высота — среднее число оценок игр с ≥ @MinRatings оценками, сглаженное к itch.io.</text>
+        }
+        else
+        {
+            <text>Высота — типичное число оценок: геометрическое среднее игр с ≥ @MinRatings оценками, сглаженное к itch.io. Медиана часто равна 1–2 и слипает теги в полосы; переключатель «Среднее» разводит их.</text>
+        }
+        Скрыты сегменты, у которых игр с оценками меньше @MinGames. Пунктир — медианы среди показанных сегментов. Размер точки — шанс набрать @Threshold+ оценок. Клик по точке открывает страницу сегмента.
     </MudText>
 }
 
@@ -58,6 +66,8 @@ else
     [Parameter] public int Labels { get; set; } = 28;
     [Parameter] public int Threshold { get; set; } = 10;
     [Parameter] public int MinRatings { get; set; } = 4;
+    [Parameter] public int MinGames { get; set; } = 1;
+    [Parameter] public bool UseMean { get; set; }
 
     private const int W = 1000, H = 580, L = 64, R = 24, T = 16, B = 48;
     private sealed record Point(SegmentStats Stats, double X, double Y, double Radius)
@@ -81,14 +91,16 @@ else
 
     private static string F(double v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
 
+    private double Demand(SegmentStats s) => UseMean ? s.AdjMean : s.Typical;
+
     protected override void OnParametersSet()
     {
-        var items = Items.Where(s => s.Opportunity is not null && s.Denominator > 0 && s.Typical > 0).ToList();
+        var items = Items.Where(s => s.Opportunity is not null && s.Qualified >= MinGames && s.Denominator > 0 && Demand(s) > 0).ToList();
         _points = [];
         if (items.Count == 0) return;
 
         var xs = items.Select(s => Math.Log10(s.Denominator)).ToList();
-        var ys = items.Select(s => Math.Log10(s.Typical)).ToList();
+        var ys = items.Select(s => Math.Log10(Demand(s))).ToList();
         double x0 = Math.Floor(xs.Min() * 2) / 2, x1 = Math.Ceiling(xs.Max() * 2) / 2;
         double y0 = Math.Max(0, Math.Floor(ys.Min() * 4) / 4), y1 = Math.Ceiling(ys.Max() * 4) / 4;
         if (x1 - x0 < 0.5) x1 = x0 + 0.5;
@@ -107,7 +119,7 @@ else
         for (var e = (int)Math.Ceiling(x0); e <= Math.Floor(x1); e++)
             _xTicks.Add(new Tick(Px(e), Fmt.Short(Math.Pow(10, e))));
         _yTicks = [];
-        foreach (var v in new double[] { 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000 })
+        foreach (var v in new double[] { 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000 })
         {
             var lv = Math.Log10(v);
             if (lv >= y0 && lv <= y1) _yTicks.Add(new Tick(Py(lv), Fmt.Short(v)));
@@ -160,7 +172,7 @@ else
     private string Tooltip(SegmentStats s) =>
         $"{s.Name} — {SegmentAnalyzer.QuadrantName(s.Quadrant)}\n" +
         $"{(s.IncludesUnrated ? "Игр на itch.io" : "Игр с оценками")}: {(s.DenominatorEstimated ? "≈" : "")}{Fmt.N(s.Denominator)}\n" +
-        $"Типичные оценки (≥ {MinRatings}): {Fmt.N(s.Typical, 1)} · медиана {Fmt.N(s.Median, 0)}\n" +
+        $"Оценки (≥ {MinRatings}): среднее {Fmt.N(s.Mean, 1)} · медиана {Fmt.N(s.Median, 0)} · типичные {Fmt.N(s.Typical, 1)}\n" +
         $"Шанс {Threshold}+ оценок: {Fmt.Pct(s.SuccessShare, 1)}\n" +
         $"Тренд: {(s.Trend is { } t ? Fmt.Signed(t * 100, 0, "%") : "—")}\n" +
         $"Opportunity: {Fmt.N(s.Opportunity, 0)}";

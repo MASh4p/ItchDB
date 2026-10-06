@@ -12,7 +12,7 @@ public enum ChartKind
     Area,
 }
 
-public sealed record ChartSeries(string Name, IReadOnlyList<ChartPoint> Points, ChartKind Kind = ChartKind.Line, bool SecondAxis = false, string? Color = null);
+public sealed record ChartSeries(string Name, IReadOnlyList<ChartPoint> Points, ChartKind Kind = ChartKind.Line, bool SecondAxis = false, string? Color = null, int? AxisDecimals = null);
 
 public static class ChartData
 {
@@ -22,15 +22,15 @@ public static class ChartData
     public static string Key(IEnumerable<ChartSeries> series) =>
         string.Join(";", series.Select(s => s.Name + ":" + string.Join(",", s.Points.Select(p => p.Label + "=" + p.Value.ToString("R")))));
 
-    /// <summary>Publication-year cohorts: games on itch.io (where the year filter exists), games in the database and their median ratings.</summary>
+    /// <summary>Publication-year cohorts: games on itch.io (where the year filter exists), games in the database and their mean ratings.</summary>
     public static List<ChartSeries> Years(IReadOnlyList<YearPoint> years)
     {
         var series = new List<ChartSeries>();
         if (years.Any(y => y.TotalItch is not null))
             series.Add(new("Игр на itch.io", years.Select(y => new ChartPoint(y.Year.ToString(), y.TotalItch ?? 0)).ToList(), ChartKind.Bar, Color: "#3A3F58"));
         series.Add(new("В базе", years.Select(y => new ChartPoint(y.Year.ToString(), y.Known)).ToList(), ChartKind.Bar, Color: "#2F6F8F"));
-        series.Add(new("Медиана оценок", years.Select(y => new ChartPoint(y.Year.ToString(), double.IsNaN(y.Median) ? 0 : y.Median)).ToList(),
-            ChartKind.Line, SecondAxis: true, Color: ItchTheme.Accent));
+        series.Add(new("Среднее оценок", years.Select(y => new ChartPoint(y.Year.ToString(), double.IsNaN(y.Mean) ? 0 : y.Mean)).ToList(),
+            ChartKind.Line, SecondAxis: true, Color: ItchTheme.Accent, AxisDecimals: 1));
         return series;
     }
 }

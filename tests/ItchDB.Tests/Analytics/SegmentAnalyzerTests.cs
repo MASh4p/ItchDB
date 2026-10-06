@@ -25,6 +25,7 @@ public class SegmentAnalyzerTests
         Assert.Equal(4, s.Rated);
         Assert.Equal(3, s.Qualified);
         Assert.Equal(10, s.Median);
+        Assert.Equal((5 + 10 + 20) / 3.0, s.Mean, 10);
         Assert.Equal(100, s.Denominator);
         Assert.False(s.DenominatorEstimated);
         Assert.Equal(2, s.Successes);
@@ -48,6 +49,22 @@ public class SegmentAnalyzerTests
         Assert.False(s.IncludesUnrated);
         Assert.Equal(0.5, s.SuccessShare, 10);
         Assert.Equal(96, s.Bin0);
+    }
+
+    [Fact]
+    public void Compute_KeepsListingTotalWithinTwoGamesOfTheRatedList()
+    {
+        var close = SegmentData(new() { ["tag-a"] = 3 });
+        var s = new SegmentAnalyzer(close, new AnalyticsFilter(false, 4), P, TestData.Now).Compute(Segments.FromTag(close.Tags[1]));
+
+        Assert.False(s.DenominatorEstimated);
+        Assert.Equal(4, s.Denominator);
+        Assert.Equal(0, s.Bin0);
+
+        var far = SegmentData(new() { ["tag-a"] = 1 });
+        var missing = new SegmentAnalyzer(far, new AnalyticsFilter(false, 4), P, TestData.Now).Compute(Segments.FromTag(far.Tags[1]));
+        Assert.True(missing.DenominatorEstimated);
+        Assert.Equal(7, missing.Denominator);
     }
 
     [Fact]
