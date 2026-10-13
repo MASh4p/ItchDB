@@ -1,78 +1,77 @@
 @page "/tags"
 @inherits AnalyticsPage
 
-<PageTitle>Теги и жанры — ItchDB</PageTitle>
+<PageTitle>@Txt.S("Теги и жанры", "Tags and genres") — ItchDB</PageTitle>
 
-<MudText Typo="Typo.h4">Теги и жанры</MudText>
+<MudText Typo="Typo.h4">@Txt.S("Теги и жанры", "Tags and genres")</MudText>
 <MudText Class="itch-muted mb-3">
-    Спрос, конкуренция и шансы каждого сегмента. Медианы считаются по играм с ≥ @F.MinRatings оценками.
-    При включённом «0 оценок» конкуренция и шанс делятся на счётчик всего списка, включая игры без оценок.
-    Клик по названию открывает подробности сегмента.
+    @Txt.S($"Спрос, конкуренция и шансы каждого сегмента. Медианы считаются по играм с ≥ {F.MinRatings} оценками. При включённом «0 оценок» конкуренция и шанс делятся на счётчик всего списка, включая игры без оценок. Клик по названию открывает подробности сегмента.",
+        $"Demand, competition and the odds of each segment. Medians use games with ≥ {F.MinRatings} ratings. With “0 ratings” on, competition and chance use the full list counter, including unrated games. The name opens the segment page.")
 </MudText>
 
 <DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
     @if (_vm is { } vm)
     {
         <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3">
-            <MudTabPanel Text="@($"Жанры · {vm.Genres.Count}")">
+            <MudTabPanel Text="@($"{Txt.S("Жанры", "Genres")} · {vm.Genres.Count}")">
                 <MudGrid Spacing="3" Class="mb-2">
                     <MudItem xs="12" md="6">
                         <MudPaper Class="pa-4" Outlined="true">
-                            <div class="itch-section-title">@(Ui.DemandUsesMean ? "Спрос: сглаженное среднее оценок" : "Спрос: сглаженная медиана оценок")</div>
-                            <BarChart Items="vm.GenreDemand" Name="@(Ui.DemandUsesMean ? "Сглаженное среднее" : "Сглаженная медиана")" Horizontal="true" Height="420" Decimals="1" Color="#5CC8FA" />
+                            <div class="itch-section-title">@(Ui.DemandUsesMean ? Txt.S("Спрос: сглаженное среднее оценок", "Demand: smoothed mean ratings") : Txt.S("Спрос: сглаженная медиана оценок", "Demand: smoothed median ratings"))</div>
+                            <BarChart Items="vm.GenreDemand" Name="@(Ui.DemandUsesMean ? Txt.S("Сглаженное среднее", "Smoothed mean") : Txt.S("Сглаженная медиана", "Smoothed median"))" Horizontal="true" Height="420" Decimals="1" Color="#5CC8FA" />
                         </MudPaper>
                     </MudItem>
                     <MudItem xs="12" md="6">
                         <MudPaper Class="pa-4" Outlined="true">
-                            <div class="itch-section-title">Конкуренция: игр на itch.io</div>
-                            <BarChart Items="vm.GenreSupply" Name="Игр" Horizontal="true" Height="420" Color="#3A3F58" />
+                            <div class="itch-section-title">@Txt.S("Конкуренция: игр на itch.io", "Competition: games on itch.io")</div>
+                            <BarChart Items="vm.GenreSupply" Name="@Txt.S("Игр", "Games")" Horizontal="true" Height="420" Color="#3A3F58" />
                         </MudPaper>
                     </MudItem>
                 </MudGrid>
                 <SegmentTable Rows="vm.Genres" Params="A.Params" MinRatings="F.MinRatings" ExportName="genres" TrendCohorts="@vm.Cohorts" RowsPerPage="25" />
             </MudTabPanel>
-            <MudTabPanel Text="@($"Теги · {vm.Tags.Count}")">
+            <MudTabPanel Text="@($"{Txt.S("Теги", "Tags")} · {vm.Tags.Count}")">
                 <SegmentTable Rows="vm.Tags" Params="A.Params" MinRatings="F.MinRatings" ExportName="tags" TrendCohorts="@vm.Cohorts" RowsPerPage="50" HideSmallByDefault="true" />
             </MudTabPanel>
-            <MudTabPanel Text="@($"Движки · {vm.Engines.Count}")">
+            <MudTabPanel Text="@($"{Txt.S("Движки", "Engines")} · {vm.Engines.Count}")">
                 <SegmentTable Rows="vm.Engines" Params="A.Params" MinRatings="F.MinRatings" ExportName="engines" TrendCohorts="@vm.Cohorts" RowsPerPage="25" />
             </MudTabPanel>
-            <MudTabPanel Text="@($"Форматы · {vm.Formats.Count}")">
-                <MudText Typo="Typo.body2" Class="itch-muted mb-2">Платформа, цена, длительность, мультиплеер, управление, статус разработки, использование ИИ и джемы.</MudText>
+            <MudTabPanel Text="@($"{Txt.S("Форматы", "Formats")} · {vm.Formats.Count}")">
+                <MudText Typo="Typo.body2" Class="itch-muted mb-2">@Txt.S("Платформа, цена, длительность, мультиплеер, управление, статус разработки, использование ИИ и джемы.", "Platform, price, length, multiplayer, input, development status, AI use and jams.")</MudText>
                 <SegmentTable Rows="vm.Formats" Params="A.Params" MinRatings="F.MinRatings" ExportName="formats" TrendCohorts="@vm.Cohorts" RowsPerPage="50" />
             </MudTabPanel>
-            <MudTabPanel Text="@($"Языки · {vm.Languages.Count}")">
+            <MudTabPanel Text="@($"{Txt.S("Языки", "Languages")} · {vm.Languages.Count}")">
                 <SegmentTable Rows="vm.Languages" Params="A.Params" MinRatings="F.MinRatings" ExportName="languages" TrendCohorts="@vm.Cohorts" ShowOpportunity="false" DefaultSortByOpportunity="false" RowsPerPage="25" />
             </MudTabPanel>
-            <MudTabPanel Text="Каталог itch.io">
+            <MudTabPanel Text="@Txt.S("Каталог itch.io", "itch.io catalog")">
                 <MudTable T="TagRow" Items="vm.Catalog" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" Elevation="0" Class="itch-table"
                           Filter="@(t => string.IsNullOrWhiteSpace(_catalogSearch) || t.Name.Contains(_catalogSearch, StringComparison.OrdinalIgnoreCase) || t.Slug.Contains(_catalogSearch, StringComparison.OrdinalIgnoreCase))">
                     <ToolBarContent>
-                        <MudText Typo="Typo.h6">Все теги со страницы itch.io/tags</MudText>
-                        <MudText Typo="Typo.caption" Class="itch-muted ml-3">рост — проектов в день между первым и последним снимком каталога</MudText>
+                        <MudText Typo="Typo.h6">@Txt.S("Все теги со страницы itch.io/tags", "Every tag from itch.io/tags")</MudText>
+                        <MudText Typo="Typo.caption" Class="itch-muted ml-3">@Txt.S("рост — проектов в день между первым и последним снимком каталога", "growth — projects per day between the first and last catalog snapshot")</MudText>
                         <MudSpacer />
-                        <MudTextField T="string" @bind-Value="_catalogSearch" Placeholder="Поиск" Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                        <MudTextField T="string" @bind-Value="_catalogSearch" Placeholder="@Txt.SearchPlaceholder" Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                                       IconSize="Size.Small" Variant="Variant.Outlined" Margin="Margin.Dense" Class="itch-search mr-2" />
                         <ExportMenu T="TagRow" Name="tag-catalog" Rows="@(() => vm.Catalog)" Columns="CatalogColumns" />
                     </ToolBarContent>
                     <HeaderContent>
-                        <MudTh><MudTableSortLabel T="TagRow" SortBy="t => t.Name">Тег</MudTableSortLabel></MudTh>
-                        <MudTh>Тип</MudTh>
-                        <MudTh Style="text-align:right"><MudTableSortLabel T="TagRow" SortBy="t => t.ProjectsCount ?? 0" InitialDirection="SortDirection.Descending">Проектов</MudTableSortLabel></MudTh>
-                        <MudTh Style="text-align:right"><MudTableSortLabel T="TagRow" SortBy="t => t.ThisWeekCount ?? 0">За неделю</MudTableSortLabel></MudTh>
-                        <MudTh Style="text-align:right"><MudTableSortLabel T="TagRow" SortBy="t => Trends.ProjectsPerDay(t) ?? double.MinValue">Рост в день</MudTableSortLabel></MudTh>
-                        <MudTh Style="text-align:right"><MudTableSortLabel T="TagRow" SortBy="t => D.Members(t.Id).Count">В базе</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="TagRow" SortBy="t => t.Name">@Txt.S("Тег", "Tag")</MudTableSortLabel></MudTh>
+                        <MudTh>@Txt.S("Тип", "Kind")</MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="TagRow" SortBy="t => t.ProjectsCount ?? 0" InitialDirection="SortDirection.Descending">@Txt.S("Проектов", "Projects")</MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="TagRow" SortBy="t => t.ThisWeekCount ?? 0">@Txt.S("За неделю", "This week")</MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="TagRow" SortBy="t => Trends.ProjectsPerDay(t) ?? double.MinValue">@Txt.S("Рост в день", "Per day")</MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="TagRow" SortBy="t => D.Members(t.Id).Count">@Txt.S("В базе", "In database")</MudTableSortLabel></MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd DataLabel="Тег"><MudLink Href="@($"/tags/{Uri.EscapeDataString(context.Slug)}")">@Segments.DisplayName(context)</MudLink></MudTd>
-                        <MudTd DataLabel="Тип" Class="itch-muted">@ItchCatalog.KindName(context.Kind)</MudTd>
-                        <MudTd DataLabel="Проектов" Class="itch-num" Style="text-align:right">@Fmt.N(context.ProjectsCount)</MudTd>
-                        <MudTd DataLabel="За неделю" Class="itch-num" Style="text-align:right">@Fmt.N(context.ThisWeekCount)</MudTd>
-                        <MudTd DataLabel="Рост в день" Class="itch-num" Style="text-align:right">@Fmt.N(Trends.ProjectsPerDay(context), 1)</MudTd>
-                        <MudTd DataLabel="В базе" Class="itch-num" Style="text-align:right">@Fmt.N(D.Members(context.Id).Count)</MudTd>
+                        <MudTd DataLabel="@Txt.S("Тег", "Tag")"><MudLink Href="@($"/tags/{Uri.EscapeDataString(context.Slug)}")">@Segments.DisplayName(context)</MudLink></MudTd>
+                        <MudTd DataLabel="@Txt.S("Тип", "Kind")" Class="itch-muted">@ItchCatalog.KindName(context.Kind)</MudTd>
+                        <MudTd DataLabel="@Txt.S("Проектов", "Projects")" Class="itch-num" Style="text-align:right">@Fmt.N(context.ProjectsCount)</MudTd>
+                        <MudTd DataLabel="@Txt.S("За неделю", "This week")" Class="itch-num" Style="text-align:right">@Fmt.N(context.ThisWeekCount)</MudTd>
+                        <MudTd DataLabel="@Txt.S("Рост в день", "Per day")" Class="itch-num" Style="text-align:right">@Fmt.N(Trends.ProjectsPerDay(context), 1)</MudTd>
+                        <MudTd DataLabel="@Txt.S("В базе", "In database")" Class="itch-num" Style="text-align:right">@Fmt.N(D.Members(context.Id).Count)</MudTd>
                     </RowTemplate>
                     <PagerContent>
-                        <MudTablePager RowsPerPageString="Строк:" InfoFormat="{first_item}–{last_item} из {all_items}" PageSizeOptions="new[] { 25, 50, 100, 500 }" />
+                        <MudTablePager RowsPerPageString="@Txt.RowsLabel" InfoFormat="@Txt.PagerInfo" PageSizeOptions="new[] { 25, 50, 100, 500 }" />
                     </PagerContent>
                 </MudTable>
             </MudTabPanel>
@@ -95,16 +94,16 @@
     private Vm? _vm;
     private string? _catalogSearch;
 
-    private static readonly IReadOnlyList<ExportColumn<TagRow>> CatalogColumns =
+    private IReadOnlyList<ExportColumn<TagRow>> CatalogColumns =>
     [
-        new("Тег", t => t.Name),
-        new("Слаг", t => t.Slug),
-        new("Тип", t => ItchCatalog.KindName(t.Kind)),
-        new("Проектов", t => t.ProjectsCount),
-        new("За неделю", t => t.ThisWeekCount),
-        new("Рост в день", t => Trends.ProjectsPerDay(t)),
-        new("Игр в списке тега", t => t.ListingTotal),
-        new("Связанные теги", t => string.Join(", ", t.Related)),
+        new(Txt.S("Тег", "Tag"), t => Segments.DisplayName(t)),
+        new(Txt.S("Слаг", "Slug"), t => t.Slug),
+        new(Txt.S("Тип", "Kind"), t => ItchCatalog.KindName(t.Kind)),
+        new(Txt.S("Проектов", "Projects"), t => t.ProjectsCount),
+        new(Txt.S("За неделю", "This week"), t => t.ThisWeekCount),
+        new(Txt.S("Рост в день", "Per day"), t => Trends.ProjectsPerDay(t)),
+        new(Txt.S("Игр в списке тега", "Games in the tag list"), t => t.ListingTotal),
+        new(Txt.S("Связанные теги", "Related tags"), t => string.Join(", ", t.Related)),
     ];
 
     protected override void Compute()

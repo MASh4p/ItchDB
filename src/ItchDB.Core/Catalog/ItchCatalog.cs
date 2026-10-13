@@ -123,19 +123,7 @@ public static class ItchCatalog
         return TagKind.Other;
     }
 
-    public static string KindName(TagKind kind) => kind switch
-    {
-        TagKind.Tag => "Тег",
-        TagKind.Genre => "Жанр",
-        TagKind.Engine => "Движок",
-        TagKind.Duration => "Длительность сессии",
-        TagKind.Language => "Язык",
-        TagKind.Input => "Управление",
-        TagKind.Accessibility => "Доступность",
-        TagKind.Multiplayer => "Мультиплеер",
-        TagKind.Platform => "Платформа",
-        _ => "Прочее",
-    };
+    public static string KindName(TagKind kind) => CatalogNames.TagKindName(kind, TextLang.Current);
 
     /// <summary>Human readable fallback for a slug without a stored name: "tag-pixel-art" -> "pixel art".</summary>
     public static string NameFromSlug(string slug)

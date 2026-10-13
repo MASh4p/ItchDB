@@ -8,7 +8,7 @@
     {
         @if (!Computing)
         {
-            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Сегмент «@Slug» не найден в собранных данных.</MudAlert>
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">@Txt.S($"Сегмент «{Slug}» не найден в собранных данных.", $"Segment “{Slug}” was not found in the collected data.")</MudAlert>
         }
     }
     else
@@ -17,16 +17,16 @@
         <div class="d-flex flex-wrap align-center gap-3 mb-1">
             <MudText Typo="Typo.h4">@s.Name</MudText>
             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Segments.KindName(s.Segment.Kind)</MudChip>
-            <QuadrantChip Value="s.Quadrant" />
+            <QuadrantChip @key="@($"{s.Key}:{Txt.Lang}")" Value="s.Quadrant" />
             <MudSpacer />
             @if (_vm.ItchUrl is not null)
             {
-                <MudButton Href="@_vm.ItchUrl" Target="_blank" Variant="Variant.Outlined" Size="Size.Small" EndIcon="@Icons.Material.Filled.OpenInNew">На itch.io</MudButton>
+                <MudButton Href="@_vm.ItchUrl" Target="_blank" Variant="Variant.Outlined" Size="Size.Small" EndIcon="@Icons.Material.Filled.OpenInNew">@Txt.S("На itch.io", "On itch.io")</MudButton>
             }
             @if (_vm.Tag is not null)
             {
                 <MudButton Href="@($"/developer?tab=concept&tags={Uri.EscapeDataString(_vm.Tag.Slug)}")" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                           StartIcon="@Icons.Material.Filled.Lightbulb">Проверить идею с этим тегом</MudButton>
+                           StartIcon="@Icons.Material.Filled.Lightbulb">@Txt.S("Проверить идею с этим тегом", "Check an idea with this tag")</MudButton>
             }
         </div>
         @if (!string.IsNullOrEmpty(_vm.Tag?.Description))
@@ -38,51 +38,52 @@
         @if (s.SmallSample)
         {
             <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mb-3">
-                Меньше @A.Params.MinSegmentSample игр с оценками — цифры ниже шумные, сегмент не участвует в рейтинге ниш.
+                @Txt.S($"Меньше {A.Params.MinSegmentSample} игр с оценками — цифры ниже шумные, сегмент не участвует в рейтинге ниш.",
+                       $"Fewer than {A.Params.MinSegmentSample} rated games — the numbers below are noisy, and this segment is left out of the niche ranking.")
             </MudAlert>
         }
 
         <MudGrid Spacing="3" Class="mb-1">
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="@(s.IncludesUnrated ? "Игр на itch.io" : "Игр с оценками")" Value="@((s.DenominatorEstimated ? "≈" : "") + Fmt.Short(s.Denominator))" Large="true"
-                         Hint="@($"в базе {Fmt.N(s.Known)}{(s.ThisWeek is { } w ? $" · +{Fmt.N(w)} за неделю" : "")}")"
+                    <Kpi Label="@(s.IncludesUnrated ? Txt.S("Игр на itch.io", "Games on itch.io") : Txt.S("Игр с оценками", "Rated games"))" Value="@((s.DenominatorEstimated ? "≈" : "") + Fmt.Short(s.Denominator))" Large="true"
+                         Hint="@(s.ThisWeek is { } addedThisWeek ? Txt.S($"в базе {Fmt.N(s.Known)} · +{Fmt.N(addedThisWeek)} за неделю", $"in the database {Fmt.N(s.Known)} · +{Fmt.N(addedThisWeek)} this week") : Txt.S($"в базе {Fmt.N(s.Known)}", $"in the database {Fmt.N(s.Known)}"))"
                          Formula="@Formulas.Competition.Formula" Tip="@Formulas.Competition.Text" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="@(Ui.DemandUsesMean ? "Среднее оценок" : "Медиана оценок")" Value="@Fmt.N(Ui.DemandUsesMean ? s.Mean : s.Median, Ui.DemandUsesMean ? 1 : 0)" Large="true"
-                         Hint="@($"сглаженное {Fmt.N(Ui.DemandUsesMean ? s.AdjMean : s.AdjMedian, 1)} · {Fmt.Times(_vm.VsAll)} к itch.io")"
+                    <Kpi Label="@(Ui.DemandUsesMean ? Txt.S("Среднее оценок", "Mean ratings") : Txt.S("Медиана оценок", "Median ratings"))" Value="@Fmt.N(Ui.DemandUsesMean ? s.Mean : s.Median, Ui.DemandUsesMean ? 1 : 0)" Large="true"
+                         Hint="@Txt.S($"сглаженное {Fmt.N(Ui.DemandUsesMean ? s.AdjMean : s.AdjMedian, 1)} · {Fmt.Times(_vm.VsAll)} к itch.io", $"smoothed {Fmt.N(Ui.DemandUsesMean ? s.AdjMean : s.AdjMedian, 1)} · {Fmt.Times(_vm.VsAll)} vs itch.io")"
                          Formula="@(Ui.DemandUsesMean ? Formulas.Mean(F.MinRatings).Formula : Formulas.Median(F.MinRatings).Formula)"
                          Tip="@(Ui.DemandUsesMean ? Formulas.Mean(F.MinRatings).Text : Formulas.Median(F.MinRatings).Text)" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Лучшие 10%" Value="@($"{Fmt.N(s.P90, 0)}+")" Large="true" Hint="@($"P75: {Fmt.N(s.P75, 0)}")"
+                    <Kpi Label="@Txt.S("Лучшие 10%", "Top 10%")" Value="@($"{Fmt.N(s.P90, 0)}+")" Large="true" Hint="@($"P75: {Fmt.N(s.P75, 0)}")"
                          Formula="@Formulas.Quantiles.Formula" Tip="@Formulas.Quantiles.Text" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="@($"Шанс {A.Params.SuccessThreshold}+ оценок")" Value="@Fmt.Pct(s.SuccessShare, 1)" Large="true" Color="#4CC38A"
-                         Hint="@($"95%: {Fmt.Pct(s.SuccessLow, 1)}–{Fmt.Pct(s.SuccessHigh, 1)} · по itch.io {Fmt.Pct(_vm.All.SuccessShare, 1)}")"
+                    <Kpi Label="@Txt.S($"Шанс {A.Params.SuccessThreshold}+ оценок", $"Chance of {A.Params.SuccessThreshold}+ ratings")" Value="@Fmt.Pct(s.SuccessShare, 1)" Large="true" Color="#4CC38A"
+                         Hint="@Txt.S($"95%: {Fmt.Pct(s.SuccessLow, 1)}–{Fmt.Pct(s.SuccessHigh, 1)} · по itch.io {Fmt.Pct(_vm.All.SuccessShare, 1)}", $"95%: {Fmt.Pct(s.SuccessLow, 1)}–{Fmt.Pct(s.SuccessHigh, 1)} · itch.io overall {Fmt.Pct(_vm.All.SuccessShare, 1)}")"
                          Formula="@Formulas.Success(A.Params.SuccessThreshold).Formula" Tip="@Formulas.Success(A.Params.SuccessThreshold).Text" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Тренд" Value="@(s.Trend is { } t ? Fmt.Signed(t * 100, 0, "%") : "—")" Large="true"
+                    <Kpi Label="@Txt.S("Тренд", "Trend")" Value="@(s.Trend is { } t ? Fmt.Signed(t * 100, 0, "%") : "—")" Large="true"
                          Color="@(s.Trend is >= 0.15 ? "#4CC38A" : s.Trend is <= -0.15 ? "#FF8A8A" : null)"
-                         Hint="@($"успешных {s.RecentSuccesses} против {s.EarlierSuccesses}")"
+                         Hint="@Txt.S($"успешных {s.RecentSuccesses} против {s.EarlierSuccesses}", $"successes {s.RecentSuccesses} vs {s.EarlierSuccesses}")"
                          Formula="@Formulas.Trend(_vm.Cohorts).Formula" Tip="@Formulas.Trend(_vm.Cohorts).Text" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
                     <Kpi Label="Opportunity" Value="@Fmt.N(s.Opportunity, 0)" Large="true" Color="@QuadrantChip.Color(s.Quadrant)"
-                         Hint="@($"порог входа {Fmt.N(s.EntryThreshold, 0)} оценок")"
+                         Hint="@Txt.S($"порог входа {Fmt.N(s.EntryThreshold, 0)} оценок", $"entry bar {Fmt.N(s.EntryThreshold, 0)} ratings")"
                          Formula="@Formulas.Opportunity(A.Params.WeightDemand, A.Params.WeightSuccess, A.Params.WeightCompetition, A.Params.WeightTrend).Formula"
                          Tip="@Formulas.Opportunity(A.Params.WeightDemand, A.Params.WeightSuccess, A.Params.WeightCompetition, A.Params.WeightTrend).Text" />
                 </MudPaper>
@@ -92,29 +93,29 @@
         <MudGrid Spacing="3">
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4 mb-3" Outlined="true">
-                    <div class="itch-section-title">Сколько оценок набирают игры сегмента</div>
-                    <BarChart Items="_vm.Distribution" Name="Игр" Height="250" Logarithmic="true" />
+                    <div class="itch-section-title">@Txt.S("Сколько оценок набирают игры сегмента", "How many ratings games in this segment collect")</div>
+                    <BarChart Items="_vm.Distribution" Name="@Txt.S("Игр", "Games")" Height="250" Logarithmic="true" />
                 </MudPaper>
                 <MudPaper Class="pa-4 mb-3" Outlined="true">
-                    <div class="itch-section-title">По годам выхода</div>
-                    <SeriesChart Series="_vm.Years" Height="260" LeftTitle="Игр" RightTitle="Среднее оценок" />
+                    <div class="itch-section-title">@Txt.S("По годам выхода", "By release year")</div>
+                    <SeriesChart Series="_vm.Years" Height="260" LeftTitle="@Txt.S("Игр", "Games")" RightTitle="@Txt.S("Среднее оценок", "Mean ratings")" />
                 </MudPaper>
                 @if (_vm.History.Count > 0)
                 {
                     <MudPaper Class="pa-4 mb-3" Outlined="true">
-                        <div class="itch-section-title">Динамика по снимкам</div>
-                        <SeriesChart Series="_vm.History" Height="240" LeftTitle="Проектов" RightTitle="Медиана" />
+                        <div class="itch-section-title">@Txt.S("Динамика по снимкам", "Change across snapshots")</div>
+                        <SeriesChart Series="_vm.History" Height="240" LeftTitle="@Txt.S("Проектов", "Projects")" RightTitle="@Txt.S("Медиана", "Median")" />
                     </MudPaper>
                 }
                 @if (_vm.Combos.Count > 0)
                 {
                     <MudPaper Class="pa-4 mb-3" Outlined="true">
                         <div class="itch-section-title">
-                            С чем сочетается лучше всего
+                            @Txt.S("С чем сочетается лучше всего", "Best combinations")
                             <FormulaTip Title="@Formulas.Lift.Title" Formula="@Formulas.Lift.Formula" Text="@Formulas.Lift.Text" />
                         </div>
                         <MudSimpleTable Dense="true" Hover="true" Elevation="0" Style="background:transparent">
-                            <thead><tr><th>+ тег</th><th style="text-align:right">Игр</th><th style="text-align:right">Медиана</th><th style="text-align:right">Lift</th><th style="text-align:right">Шанс</th></tr></thead>
+                            <thead><tr><th>@Txt.S("+ тег", "+ tag")</th><th style="text-align:right">@Txt.S("Игр", "Games")</th><th style="text-align:right">@Txt.S("Медиана", "Median")</th><th style="text-align:right">Lift</th><th style="text-align:right">@Txt.S("Шанс", "Chance")</th></tr></thead>
                             <tbody>
                                 @foreach (var c in _vm.Combos)
                                 {
@@ -134,7 +135,7 @@
                 @if (_vm.Related.Count > 0)
                 {
                     <MudPaper Class="pa-4" Outlined="true">
-                        <div class="itch-section-title">Связанные теги на itch.io</div>
+                        <div class="itch-section-title">@Txt.S("Связанные теги на itch.io", "Related tags on itch.io")</div>
                         <div class="d-flex flex-wrap gap-1">
                             @foreach (var (tag, stats) in _vm.Related)
                             {
@@ -152,17 +153,17 @@
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-2 mb-3" Outlined="true">
-                    <GamesTable Games="_vm.Top" Title="Лидеры по оценкам" ExportName="@($"top-{Slug}")" RowsPerPage="10" Compact="true" BayesMinVotes="A.Params.BayesMinVotes" />
+                    <GamesTable Games="_vm.Top" Title="@Txt.S("Лидеры по оценкам", "Leaders by ratings")" ExportName="@($"top-{Slug}")" RowsPerPage="10" Compact="true" BayesMinVotes="A.Params.BayesMinVotes" />
                 </MudPaper>
                 @if (_vm.Hot.Count > 0)
                 {
                     <MudPaper Class="pa-2 mb-3" Outlined="true">
-                        <GamesTable Games="_vm.Hot" Title="Горячее" ExportName="@($"hot-{Slug}")" RowsPerPage="10" ShowHot="true" ShowDelta="true" ShowWr="false" Compact="true" BayesMinVotes="A.Params.BayesMinVotes" />
+                        <GamesTable Games="_vm.Hot" Title="@Txt.S("Горячее", "Hot")" ExportName="@($"hot-{Slug}")" RowsPerPage="10" ShowHot="true" ShowDelta="true" ShowWr="false" Compact="true" BayesMinVotes="A.Params.BayesMinVotes" />
                     </MudPaper>
                 }
                 <MudPaper Class="pa-2" Outlined="true">
-                    <GamesTable Games="_vm.Recent" Title="Успешные новинки" Subtitle="@($"вышли за 12 мес, ≥ {A.Params.SuccessThreshold} оценок")" ExportName="@($"recent-{Slug}")" RowsPerPage="10"
-                                ShowWr="false" Compact="true" Empty="Нет свежих игр с заметным числом оценок." BayesMinVotes="A.Params.BayesMinVotes" />
+                    <GamesTable Games="_vm.Recent" Title="@Txt.S("Успешные новинки", "Successful new games")" Subtitle="@Txt.S($"вышли за 12 мес, ≥ {A.Params.SuccessThreshold} оценок", $"released in 12 months, ≥ {A.Params.SuccessThreshold} ratings")" ExportName="@($"recent-{Slug}")" RowsPerPage="10"
+                                ShowWr="false" Compact="true" Empty="@Txt.S("Нет свежих игр с заметным числом оценок.", "No recent games with a noticeable number of ratings.")" BayesMinVotes="A.Params.BayesMinVotes" />
                 </MudPaper>
             </MudItem>
         </MudGrid>
@@ -223,9 +224,9 @@
 
         var history = new List<ChartSeries>();
         if (tag is { History.Count: >= 2 })
-            history.Add(new ChartSeries("Проектов (itch.io/tags)", tag.History.Select(h => new ChartPoint(Fmt.Date(h.Day), h.Projects)).ToList(), ChartKind.Line, Color: "#5CC8FA"));
+            history.Add(new ChartSeries(Txt.S("Проектов (itch.io/tags)", "Projects (itch.io/tags)"), tag.History.Select(h => new ChartPoint(Fmt.Date(h.Day), h.Projects)).ToList(), ChartKind.Line, Color: "#5CC8FA"));
         if (_history.Count >= 2)
-            history.Add(new ChartSeries("Медиана оценок", _history.Select(h => new ChartPoint(Fmt.Date(h.Day), h.MedianRatings)).ToList(), ChartKind.Line, SecondAxis: history.Count > 0, Color: ItchTheme.Accent));
+            history.Add(new ChartSeries(Txt.S("Медиана оценок", "Median ratings"), _history.Select(h => new ChartPoint(Fmt.Date(h.Day), h.MedianRatings)).ToList(), ChartKind.Line, SecondAxis: history.Count > 0, Color: ItchTheme.Accent));
 
         var top = members.Where(g => g.Ratings > 0).OrderByDescending(g => g.Ratings).Take(100).ToList();
         var hot = members.Where(g => g.Hot > 0).OrderByDescending(g => g.Hot).Take(50).ToList();
@@ -251,20 +252,21 @@
 
     private string Summarize(SegmentStats s, SegmentStats all, double? vsAll)
     {
+        var times = Fmt.Times(vsAll).TrimStart('×');
         var demand = vsAll switch
         {
-            >= 1.3 => $"Спрос выше среднего: типичная игра набирает в {Fmt.Times(vsAll).TrimStart('×')} раза больше оценок, чем по itch.io в целом.",
-            <= 0.77 => $"Спрос ниже среднего: типичная игра набирает меньше оценок, чем по itch.io в целом ({Fmt.Times(vsAll)}).",
-            _ => "Спрос на уровне itch.io в целом.",
+            >= 1.3 => Txt.S($"Спрос выше среднего: типичная игра набирает в {times} раза больше оценок, чем по itch.io в целом.", $"Demand is above average: a typical game collects {times} times more ratings than on itch.io overall."),
+            <= 0.77 => Txt.S($"Спрос ниже среднего: типичная игра набирает меньше оценок, чем по itch.io в целом ({Fmt.Times(vsAll)}).", $"Demand is below average: a typical game collects fewer ratings than on itch.io overall ({Fmt.Times(vsAll)})."),
+            _ => Txt.S("Спрос на уровне itch.io в целом.", "Demand is in line with itch.io overall."),
         };
         var competition = s.CompetitionPct switch
         {
-            >= 0.75 => "Конкуренция высокая — это один из самых заполненных сегментов.",
-            <= 0.25 => "Конкуренция низкая — игр в сегменте немного.",
-            _ => "Конкуренция средняя.",
+            >= 0.75 => Txt.S("Конкуренция высокая — это один из самых заполненных сегментов.", "Competition is high — this is one of the most crowded segments."),
+            <= 0.25 => Txt.S("Конкуренция низкая — игр в сегменте немного.", "Competition is low — the segment does not have many games."),
+            _ => Txt.S("Конкуренция средняя.", "Competition is moderate."),
         };
         var chance = all.SuccessShare > 0
-            ? $"Шанс набрать {A.Params.SuccessThreshold}+ оценок — {Fmt.Pct(s.SuccessShare, 1)} против {Fmt.Pct(all.SuccessShare, 1)} по всему itch.io."
+            ? Txt.S($"Шанс набрать {A.Params.SuccessThreshold}+ оценок — {Fmt.Pct(s.SuccessShare, 1)} против {Fmt.Pct(all.SuccessShare, 1)} по всему itch.io.", $"The chance of {A.Params.SuccessThreshold}+ ratings is {Fmt.Pct(s.SuccessShare, 1)} versus {Fmt.Pct(all.SuccessShare, 1)} across itch.io.")
             : "";
         return $"{demand} {competition} {chance}";
     }

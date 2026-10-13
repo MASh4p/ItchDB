@@ -60,7 +60,8 @@ public static class ConceptChecker
         ConceptQuery q,
         DateTime now,
         int? liveTotal = null,
-        Func<string, SegmentStats?>? rankedStats = null)
+        Func<string, SegmentStats?>? rankedStats = null,
+        UiLanguage language = UiLanguage.Ru)
     {
         var analyzer = new SegmentAnalyzer(d, f, p, now);
         var genreTag = q.GenreSlug is null ? null : d.Tag(q.GenreSlug);
@@ -160,7 +161,7 @@ public static class ConceptChecker
             P90Audience = qualified.Length > 0 ? Audience.Estimate(Stats.Quantile(qualified, 0.9), q.Platforms, p) : null,
             QualifiedRatings = qualified,
         };
-        result.Conclusions = Conclude(result, p, f);
+        result.Conclusions = Conclude(result, p, f, language);
         return result;
     }
 
@@ -191,84 +192,124 @@ public static class ConceptChecker
                 boosts.Where(b => b.Ratio <= 0.87).OrderBy(b => b.Ratio).Take(5).ToList());
     }
 
-    private static List<Insight> Conclude(ConceptResult r, AnalyticsParams p, AnalyticsFilter f)
+    private static List<Insight> Conclude(ConceptResult r, AnalyticsParams p, AnalyticsFilter f, UiLanguage language)
     {
+        var culture = language == UiLanguage.En ? System.Globalization.CultureInfo.GetCultureInfo("en-US") : System.Globalization.CultureInfo.GetCultureInfo("ru-RU");
+        string T(string ru, string en) => CatalogNames.Pick(language, ru, en);
+        string N(double v, int digits = 0) => double.IsNaN(v) ? "—" : v.ToString("N" + digits, culture);
+        string Pct(double share, int digits = 0) => double.IsNaN(share) ? "—" : (share * 100).ToString("N" + digits, culture) + "%";
+        string Times(double ratio) => double.IsNaN(ratio) ? "—" : "×" + ratio.ToString(ratio >= 10 ? "0" : "0.0", culture);
+        string Signed(double share) => double.IsNaN(share) ? "—" : (share > 0 ? "+" : "") + (share * 100).ToString("N0", culture) + "%";
+        string Join(IEnumerable<string> items)
+        {
+            var rows = items.ToList();
+            return rows.Count switch
+            {
+                0 => "",
+                1 => rows[0],
+                _ => string.Join(", ", rows.Take(rows.Count - 1)) + T(" и ", " and ") + rows[^1],
+            };
+        }
+
         var list = new List<Insight>();
         if (r.Qualified < p.MinSegmentSample)
         {
-            list.Add(new Insight("Мало данных",
-                $"Похожих игр с ≥ {f.MinRatings} оценками всего {r.Qualified}. Выводы ориентировочные: уберите один из тегов или дождитесь глубокого сбора.",
+            list.Add(new Insight(T("Мало данных", "Too little data"),
+                T($"Похожих игр с ≥ {f.MinRatings} оценками всего {r.Qualified}. Выводы ориентировочные: уберите один из тегов или дождитесь глубокого сбора.",
+                  $"Only {r.Qualified} similar games have ≥ {f.MinRatings} ratings. Treat this as a rough read: drop a tag or wait for deep collection."),
                 InsightTone.Warn));
         }
         if (r.Relaxed)
         {
-            list.Add(new Insight("Совпадение не по всем тегам",
-                "Игр со всеми выбранными тегами слишком мало, поэтому учтены игры, где совпадают все теги, кроме одного.", InsightTone.Info));
+            list.Add(new Insight(T("Совпадение не по всем тегам", "Not every tag matched"),
+                T("Игр со всеми выбранными тегами слишком мало, поэтому учтены игры, где совпадают все теги, кроме одного.",
+                  "Too few games have every selected tag, so games missing one tag are included."),
+                InsightTone.Info));
         }
 
         if (!double.IsNaN(r.Median) && r.GlobalMedian > 0)
         {
             var ratio = r.Median / r.GlobalMedian;
             var tone = ratio >= 1.25 ? InsightTone.Good : ratio <= 0.8 ? InsightTone.Warn : InsightTone.Info;
-            var verdict = ratio >= 1.25 ? "получают больше оценок, чем типичная игра itch.io"
-                : ratio <= 0.8 ? "получают меньше оценок, чем типичная игра itch.io"
-                : "получают примерно столько же оценок, сколько типичная игра itch.io";
-            list.Add(new Insight("Спрос", $"Похожие игры {verdict}: медиана {RuFormat.N(r.Median)} против {RuFormat.N(r.GlobalMedian)} ({RuFormat.X(ratio)}). " +
-                $"Четверть похожих игр набирает больше {RuFormat.N(r.P75)}, лучшие 10% — больше {RuFormat.N(r.P90)}.", tone));
+            var verdict = ratio >= 1.25
+                ? T("получают больше оценок, чем типичная игра itch.io", "get more ratings than a typical itch.io game")
+                : ratio <= 0.8
+                    ? T("получают меньше оценок, чем типичная игра itch.io", "get fewer ratings than a typical itch.io game")
+                    : T("получают примерно столько же оценок, сколько типичная игра itch.io", "get about as many ratings as a typical itch.io game");
+            list.Add(new Insight(T("Спрос", "Demand"),
+                T($"Похожие игры {verdict}: медиана {N(r.Median)} против {N(r.GlobalMedian)} ({Times(ratio)}). Четверть похожих игр набирает больше {N(r.P75)}, лучшие 10% — больше {N(r.P90)}.",
+                  $"Similar games {verdict}: median {N(r.Median)} against {N(r.GlobalMedian)} ({Times(ratio)}). A quarter of similar games pass {N(r.P75)}, the best 10% pass {N(r.P90)}."),
+                tone));
         }
 
         var main = r.Probabilities.FirstOrDefault(x => x.Threshold == p.SuccessThreshold);
         if (main is { GlobalShare: > 0 } && main.Denominator > 0)
         {
             var ratio = main.Share / main.GlobalShare!.Value;
-            list.Add(new Insight("Шанс успеха",
-                $"{p.SuccessThreshold}+ оценок набирают {RuFormat.Pct(main.Share, 1)} похожих игр (95%: {RuFormat.Pct(main.Low, 1)}–{RuFormat.Pct(main.High, 1)}) " +
-                $"против {RuFormat.Pct(main.GlobalShare.Value, 1)} по всему itch.io ({RuFormat.X(ratio)})" +
-                (r.DenominatorEstimated ? ". Знаменатель оценён по известным играм, поэтому доля завышена." : "."),
+            list.Add(new Insight(T("Шанс успеха", "Chance of success"),
+                T($"{p.SuccessThreshold}+ оценок набирают {Pct(main.Share, 1)} похожих игр (95%: {Pct(main.Low, 1)}–{Pct(main.High, 1)}) против {Pct(main.GlobalShare.Value, 1)} по всему itch.io ({Times(ratio)})" +
+                  (r.DenominatorEstimated ? ". Знаменатель оценён по известным играм, поэтому доля завышена." : "."),
+                  $"{Pct(main.Share, 1)} of similar games reach {p.SuccessThreshold}+ ratings (95%: {Pct(main.Low, 1)}–{Pct(main.High, 1)}) against {Pct(main.GlobalShare.Value, 1)} across itch.io ({Times(ratio)})" +
+                  (r.DenominatorEstimated ? ". The denominator is estimated from known games, so the share is high." : ".")),
                 ratio >= 1.25 ? InsightTone.Good : ratio <= 0.8 ? InsightTone.Warn : InsightTone.Info));
         }
 
         if (r.LiveTotal is { } live)
         {
             var tone = live < 300 ? InsightTone.Good : live > 5000 ? InsightTone.Warn : InsightTone.Info;
-            var text = live < 300 ? "ниша почти свободна — проверьте, что на неё есть спрос"
-                : live > 5000 ? "плотная конкуренция, выделяться придётся визуалом и крючком"
-                : "умеренная конкуренция";
-            list.Add(new Insight("Конкуренция", $"На itch.io {RuFormat.N(live)} игр с такой комбинацией фильтров: {text}.", tone));
+            var text = live < 300
+                ? T("ниша почти свободна — проверьте, что на неё есть спрос", "the niche is almost empty — check that demand exists")
+                : live > 5000
+                    ? T("плотная конкуренция, выделяться придётся визуалом и крючком", "crowded: the look and the hook have to do the work")
+                    : T("умеренная конкуренция", "moderate competition");
+            list.Add(new Insight(T("Конкуренция", "Competition"),
+                T($"На itch.io {N(live)} игр с такой комбинацией фильтров: {text}.", $"itch.io has {N(live)} games with this filter combination: {text}."),
+                tone));
         }
 
         var entry = r.TagStats.Where(s => s.EntryThreshold is not null).OrderByDescending(s => s.EntryThreshold).FirstOrDefault();
         if (entry is not null)
         {
-            list.Add(new Insight("Порог входа",
-                $"Чтобы попасть на первую страницу «Популярного» по тегу «{entry.Name}», сейчас нужно около {RuFormat.N(entry.EntryThreshold!.Value)} оценок.",
+            list.Add(new Insight(T("Порог входа", "Entry bar"),
+                T($"Чтобы попасть на первую страницу «Популярного» по тегу «{entry.Name}», сейчас нужно около {N(entry.EntryThreshold!.Value)} оценок.",
+                  $"The first page of Popular for “{entry.Name}” currently takes about {N(entry.EntryThreshold!.Value)} ratings."),
                 InsightTone.Info));
         }
 
         foreach (var s in r.TagStats.Where(s => s.Quadrant is Quadrant.BlueOcean or Quadrant.Trap))
         {
-            list.Add(new Insight(SegmentAnalyzer.QuadrantName(s.Quadrant) + $": «{s.Name}»", SegmentAnalyzer.QuadrantHint(s.Quadrant),
+            list.Add(new Insight(SegmentAnalyzer.QuadrantName(s.Quadrant, language) + T($": «{s.Name}»", $": “{s.Name}”"),
+                SegmentAnalyzer.QuadrantHint(s.Quadrant, language),
                 s.Quadrant == Quadrant.BlueOcean ? InsightTone.Good : InsightTone.Warn));
         }
         var rising = r.TagStats.Where(s => s.Trend >= 0.3).ToList();
         if (rising.Count > 0)
-            list.Add(new Insight("Тренд", $"Растут: {RuFormat.Join(rising.Select(s => $"«{s.Name}» ({RuFormat.Signed(s.Trend!.Value)})"))} доли среди успешных игр.", InsightTone.Good));
+            list.Add(new Insight(T("Тренд", "Trend"),
+                T($"Растут: {Join(rising.Select(s => $"«{s.Name}» ({Signed(s.Trend!.Value)})"))} доли среди успешных игр.",
+                  $"Rising: {Join(rising.Select(s => $"“{s.Name}” ({Signed(s.Trend!.Value)})"))} share among successful games."),
+                InsightTone.Good));
         var falling = r.TagStats.Where(s => s.Trend <= -0.3).ToList();
         if (falling.Count > 0)
-            list.Add(new Insight("Тренд", $"Остывают: {RuFormat.Join(falling.Select(s => $"«{s.Name}» ({RuFormat.Signed(s.Trend!.Value)})"))}.", InsightTone.Warn));
+            list.Add(new Insight(T("Тренд", "Trend"),
+                T($"Остывают: {Join(falling.Select(s => $"«{s.Name}» ({Signed(s.Trend!.Value)})"))}.",
+                  $"Cooling: {Join(falling.Select(s => $"“{s.Name}” ({Signed(s.Trend!.Value)})"))}."),
+                InsightTone.Warn));
 
         if (r.Boosters.Count > 0)
         {
-            list.Add(new Insight("Что добавить",
-                $"Среди похожих игр выше медиана у тех, где есть {RuFormat.Join(r.Boosters.Take(3).Select(b => $"«{Segments.DisplayName(b.Tag)}» ({RuFormat.X(b.Ratio)})"))}.",
+            list.Add(new Insight(T("Что добавить", "What to add"),
+                T($"Среди похожих игр выше медиана у тех, где есть {Join(r.Boosters.Take(3).Select(b => $"«{Segments.DisplayName(b.Tag, language)}» ({Times(b.Ratio)})"))}.",
+                  $"Among similar games the median is higher when they also have {Join(r.Boosters.Take(3).Select(b => $"“{Segments.DisplayName(b.Tag, language)}” ({Times(b.Ratio)})"))}."),
                 InsightTone.Good));
         }
 
         if (r.MedianAudience is { BelowDetection: false } a)
         {
-            list.Add(new Insight("Аудитория типичной похожей игры",
-                $"≈ {RuFormat.N(a.Views)} просмотров страницы (диапазон {RuFormat.N(a.ViewsLow)}–{RuFormat.N(a.ViewsHigh)})" +
-                (a.Calibrated ? ", по вашим реальным соотношениям." : ", по отраслевым допущениям; точнее — с API-ключом в «Моя игра»."),
+            list.Add(new Insight(T("Аудитория типичной похожей игры", "Audience of a typical similar game"),
+                T($"≈ {N(a.Views)} просмотров страницы (диапазон {N(a.ViewsLow)}–{N(a.ViewsHigh)})" +
+                  (a.Calibrated ? ", по вашим реальным соотношениям." : ", по отраслевым допущениям; точнее — с API-ключом в «Моя игра»."),
+                  $"≈ {N(a.Views)} page views (range {N(a.ViewsLow)}–{N(a.ViewsHigh)})" +
+                  (a.Calibrated ? ", from your real ratios." : ", from industry assumptions; an API key in My game makes it tighter.")),
                 InsightTone.Info));
         }
         return list;

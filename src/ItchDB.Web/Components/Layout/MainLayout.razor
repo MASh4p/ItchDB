@@ -1,6 +1,7 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @implements IDisposable
 @inject UiState Ui
+@inject IJSRuntime JS
 
 <MudThemeProvider Theme="ItchTheme.Theme" IsDarkMode="true" />
 <MudPopoverProvider />
@@ -10,35 +11,40 @@
 <MudLayout>
     <MudAppBar Elevation="0" Dense="true" Class="itch-appbar">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
-                       OnClick="@(() => _drawerOpen = !_drawerOpen)" aria-label="Меню" />
+                       OnClick="@(() => _drawerOpen = !_drawerOpen)" aria-label="@Txt.S("Меню", "Menu")" />
         <MudText Typo="Typo.h6" Class="ml-2 itch-logo">Itch<span>DB</span></MudText>
-        <MudText Typo="Typo.caption" Class="ml-3 mud-text-secondary d-none d-md-flex">локальная аналитика itch.io</MudText>
+        <MudText Typo="Typo.caption" Class="ml-3 mud-text-secondary d-none d-md-flex">@Txt.S("локальная аналитика itch.io", "local itch.io analytics")</MudText>
         <MudSpacer />
 
-        <CrawlStatusBar />
+        <CrawlStatusBar @key="Ui.Language" />
 
-        <MudTooltip Text="Игры 18+ — отдельная аудитория, которая искажает топы и медианы. По умолчанию скрыты.">
+        <MudTooltip Text="@Txt.S("Игры 18+ — отдельная аудитория, которая искажает топы и медианы. По умолчанию скрыты.", "18+ games are a separate audience and skew tops and medians. Hidden by default.")">
             <MudSwitch T="bool" Value="Ui.ShowNsfw" ValueChanged="@(v => Ui.ShowNsfw = v)" Color="Color.Primary"
                        Label="18+" Class="mr-4" />
         </MudTooltip>
 
-        <MudTooltip Text="Включено: шанс успеха, конкуренция и ниши считаются по всем играм сегмента. Игры без оценок не скачиваются — в знаменатель берётся счётчик списка itch.io. Медиана по-прежнему только по играм с оценками, иначе она везде равна нулю. Выключено: те же показатели только среди игр, у которых есть хотя бы одна оценка.">
+        <MudTooltip Text="@Txt.S("Включено: шанс успеха, конкуренция и ниши считаются по всем играм сегмента. Медиана по-прежнему только по играм с оценками. Выключено: те же показатели только среди игр, у которых есть хотя бы одна оценка.", "On: success chance, competition and niches use every game in the segment. The median still uses rated games only. Off: the same figures only among games with at least one rating.")">
             <MudSwitch T="bool" Value="Ui.IncludeUnrated" ValueChanged="@(v => Ui.IncludeUnrated = v)" Color="Color.Primary"
-                       Label="0 оценок" Class="mr-4" />
+                       Label="@Txt.S("0 оценок", "0 ratings")" Class="mr-4" />
         </MudTooltip>
 
-        <MudTooltip Text="Медианы и доли считаются только по играм, у которых оценок не меньше порога. У 81% игр оценок нет, поэтому медиана по всем играм всегда 0.">
+        <MudTooltip Text="@Txt.S("Медианы и доли считаются только по играм, у которых оценок не меньше порога. У большинства игр оценок нет, поэтому медиана по всем играм всегда 0.", "Medians and shares use only games at or above the threshold. Most games have no ratings, so a median over every game is always 0.")">
             <MudSelect T="int" Value="Ui.MinRatings" ValueChanged="@(v => Ui.MinRatings = v)" Dense="true"
-                       Variant="Variant.Outlined" Margin="Margin.Dense" Label="Мин. оценок" Class="itch-min-select mr-3">
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Label="@Txt.S("Мин. оценок", "Min ratings")" Class="itch-min-select mr-3">
                 @foreach (var v in UiState.MinRatingOptions)
                 {
                     <MudSelectItem T="int" Value="v">@($"≥ {v}")</MudSelectItem>
                 }
             </MudSelect>
         </MudTooltip>
+
+        <MudButtonGroup Variant="Variant.Outlined" OverrideStyles="false" Class="mr-2">
+            <MudButton Size="Size.Small" Variant="@(Ui.Language == UiLanguage.En ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" OnClick="@(() => Ui.Language = UiLanguage.En)">EN</MudButton>
+            <MudButton Size="Size.Small" Variant="@(Ui.Language == UiLanguage.Ru ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" OnClick="@(() => Ui.Language = UiLanguage.Ru)">RU</MudButton>
+        </MudButtonGroup>
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0" Variant="DrawerVariant.Responsive">
+    <MudDrawer @key="Ui.Language" @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0" Variant="DrawerVariant.Responsive">
         <NavMenu />
     </MudDrawer>
 
@@ -50,15 +56,24 @@
 </MudLayout>
 
 <div id="blazor-error-ui" data-nosnippet>
-    Произошла ошибка.
-    <a href="." class="reload">Перезагрузить</a>
+    @Txt.S("Произошла ошибка.", "Something went wrong.")
+    <a href="." class="reload">@Txt.S("Перезагрузить", "Reload")</a>
     <span class="dismiss">🗙</span>
 </div>
 
 @code {
     private bool _drawerOpen = true;
 
-    protected override void OnInitialized() => Ui.Changed += OnUiChanged;
+    protected override void OnInitialized()
+    {
+        TextLang.Set(Ui.Language);
+        Ui.Changed += OnUiChanged;
+    }
+
+    protected override void OnParametersSet() => TextLang.Set(Ui.Language);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender) =>
+        await JS.InvokeVoidAsync("itchSetLang", TextLang.Code(Ui.Language));
 
     private void OnUiChanged() => InvokeAsync(StateHasChanged);
 

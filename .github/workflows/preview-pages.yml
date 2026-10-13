@@ -1,0 +1,31 @@
+name: Preview Pages
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "preview/**"
+      - ".github/workflows/preview-pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: preview-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: preview
+      - id: deployment
+        uses: actions/deploy-pages@v4

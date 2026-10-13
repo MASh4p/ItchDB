@@ -4,7 +4,7 @@
 @* Exports the rows a table currently shows (with the page's filters). *@
 
 <MudMenu Icon="@Icons.Material.Outlined.FileDownload" Size="Size.Small" Dense="true" AnchorOrigin="Origin.BottomRight"
-         TransformOrigin="Origin.TopRight" Disabled="_busy" aria-label="Экспорт">
+         TransformOrigin="Origin.TopRight" Disabled="_busy" aria-label="@Txt.S("Экспорт", "Export")">
     <MudMenuItem OnClick="@(() => RunAsync(ExportFormat.Csv))">CSV (Excel, «;»)</MudMenuItem>
     <MudMenuItem OnClick="@(() => RunAsync(ExportFormat.Excel))">Excel (.xlsx)</MudMenuItem>
 </MudMenu>
@@ -25,7 +25,7 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Не удалось выгрузить: {ex.Message}", Severity.Error);
+            Snackbar.Add(Txt.S($"Не удалось выгрузить: {ex.Message}", $"Export failed: {ex.Message}"), Severity.Error);
         }
         finally
         {

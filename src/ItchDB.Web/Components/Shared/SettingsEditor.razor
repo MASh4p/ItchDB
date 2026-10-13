@@ -3,46 +3,46 @@
 
 <MudGrid Spacing="3">
     <MudItem xs="12" md="6" lg="4">
-        <MudText Typo="Typo.subtitle1" Class="mb-2">Сеть</MudText>
-        <MudNumericField T="int" @bind-Value="_m.RequestIntervalMs" Label="Интервал списков и тегов, мс" Min="0" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense"
-                         HelperText="Пауза этой вкладки после списка или тега. Остальные вкладки в это время продолжают загрузку" Class="mb-3" />
-        <MudNumericField T="int" @bind-Value="_m.GamePageIntervalMs" Label="Интервал страниц игр, мс" Min="0" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense"
-                         HelperText="Пауза этой вкладки после страницы игры. Остальные вкладки её не ждут" Class="mb-3" />
-        <MudNumericField T="int" @bind-Value="_m.ParallelRequests" Label="Параллельных запросов" Min="1" Max="8" Variant="Variant.Outlined" Margin="Margin.Dense"
-                         HelperText="Сколько вкладок грузят страницы одновременно. Запрос ждёт только свою вкладку" Class="mb-3" />
-        <MudNumericField T="int" @bind-Value="_m.RequestJitterMs" Label="Случайная добавка, мс" Min="0" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense"
-                         HelperText="Добавляется к паузе вкладки, которая только что закончила загрузку" Class="mb-3" />
-        <MudTextField T="string" @bind-Value="_pauses" Label="Паузы при Cloudflare, мин (через запятую)" Variant="Variant.Outlined" Margin="Margin.Dense"
-                      HelperText="После последней паузы сбор останавливается" Class="mb-3" />
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@Txt.S("Сеть", "Network")</MudText>
+        <MudNumericField T="int" @bind-Value="_m.RequestIntervalMs" Label="@Txt.S("Интервал списков и тегов, мс", "List and tag interval, ms")" Min="0" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="@Txt.S("Пауза этой вкладки после списка или тега. Остальные вкладки в это время продолжают загрузку", "This tab pauses after a list or tag. The other tabs keep loading")" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_m.GamePageIntervalMs" Label="@Txt.S("Интервал страниц игр, мс", "Game page interval, ms")" Min="0" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="@Txt.S("Пауза этой вкладки после страницы игры. Остальные вкладки её не ждут", "This tab pauses after a game page. The other tabs do not wait for it")" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_m.ParallelRequests" Label="@Txt.S("Параллельных запросов", "Parallel requests")" Min="1" Max="8" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="@Txt.S("Сколько вкладок грузят страницы одновременно. Запрос ждёт только свою вкладку", "How many tabs load pages at once. A request waits only for its own tab")" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_m.RequestJitterMs" Label="@Txt.S("Случайная добавка, мс", "Random extra delay, ms")" Min="0" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="@Txt.S("Добавляется к паузе вкладки, которая только что закончила загрузку", "Added to the pause of the tab that just finished loading")" Class="mb-3" />
+        <MudTextField T="string" @bind-Value="_pauses" Label="@Txt.S("Паузы при Cloudflare, мин (через запятую)", "Cloudflare pauses, minutes (comma-separated)")" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      HelperText="@Txt.S("После последней паузы сбор останавливается", "After the last pause the crawl stops")" Class="mb-3" />
         <MudTextField T="string" @bind-Value="_m.UserAgent" Label="User-Agent" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2"
-                      HelperText="Должен совпадать с браузером, из которого взят cf_clearance" />
+                      HelperText="@Txt.S("Должен совпадать с браузером, из которого взят cf_clearance", "Must match the browser the cf_clearance cookie came from")" />
     </MudItem>
 
     <MudItem xs="12" md="6" lg="4">
-        <MudText Typo="Typo.subtitle1" Class="mb-2">Расписание</MudText>
-        <MudSwitch T="bool" @bind-Value="_m.AutoDailyEnabled" Color="Color.Primary" Label="Автоматическое ежедневное обновление, пока приложение открыто" Class="mb-2" />
-        <MudNumericField T="int" @bind-Value="_m.DailyIntervalHours" Label="Интервал, часов" Min="1" Max="168" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@Txt.S("Расписание", "Schedule")</MudText>
+        <MudSwitch T="bool" @bind-Value="_m.AutoDailyEnabled" Color="Color.Primary" Label="@Txt.S("Автоматическое ежедневное обновление, пока приложение открыто", "Automatic daily update while the app is open")" Class="mb-2" />
+        <MudNumericField T="int" @bind-Value="_m.DailyIntervalHours" Label="@Txt.S("Интервал, часов", "Interval, hours")" Min="1" Max="168" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
 
-        <MudText Typo="Typo.subtitle1" Class="mb-2">Аналитика</MudText>
-        <MudNumericField T="int" @bind-Value="_m.SuccessThreshold" Label="«Успех» — оценок не меньше" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense"
-                         HelperText="Порог для вероятности успеха P(≥X) и доли успешных" Class="mb-3" />
-        <MudNumericField T="int" @bind-Value="_m.MinSegmentSample" Label="Минимальная выборка сегмента" Min="3" Variant="Variant.Outlined" Margin="Margin.Dense"
-                         HelperText="Сегменты с меньшим числом игр не участвуют в рейтингах" Class="mb-3" />
-        <MudNumericField T="double" @bind-Value="_m.ShrinkK" Label="Сглаживание медианы k" Min="0" Step="5" Variant="Variant.Outlined" Margin="Margin.Dense"
-                         HelperText="adj = (n·медиана сегмента + k·общая медиана) / (n + k)" Class="mb-3" />
-        <MudNumericField T="int" @bind-Value="_m.BayesMinVotes" Label="Взвешенный рейтинг: m" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense"
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@Txt.S("Аналитика", "Analytics")</MudText>
+        <MudNumericField T="int" @bind-Value="_m.SuccessThreshold" Label="@Txt.S("«Успех» — оценок не меньше", "“Success” — at least this many ratings")" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="@Txt.S("Порог для вероятности успеха P(≥X) и доли успешных", "Threshold for the success probability P(≥X) and the share of successes")" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_m.MinSegmentSample" Label="@Txt.S("Минимальная выборка сегмента", "Minimum segment sample")" Min="3" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="@Txt.S("Сегменты с меньшим числом игр не участвуют в рейтингах", "Segments with fewer games are left out of the rankings")" Class="mb-3" />
+        <MudNumericField T="double" @bind-Value="_m.ShrinkK" Label="@Txt.S("Сглаживание медианы k", "Median smoothing k")" Min="0" Step="5" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         HelperText="@Txt.S("adj = (n·медиана сегмента + k·общая медиана) / (n + k)", "adj = (n·segment median + k·overall median) / (n + k)")" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_m.BayesMinVotes" Label="@Txt.S("Взвешенный рейтинг: m", "Weighted rating: m")" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense"
                          HelperText="WR = v/(v+m)·R + m/(v+m)·C" />
     </MudItem>
 
     <MudItem xs="12" md="6" lg="4">
-        <MudText Typo="Typo.subtitle1" Class="mb-2">Opportunity score — веса</MudText>
-        <MudNumericField T="double" @bind-Value="_m.WeightDemand" Label="Спрос" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-        <MudNumericField T="double" @bind-Value="_m.WeightSuccess" Label="Шанс успеха" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-        <MudNumericField T="double" @bind-Value="_m.WeightCompetition" Label="Низкая конкуренция" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-        <MudNumericField T="double" @bind-Value="_m.WeightTrend" Label="Тренд" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@Txt.S("Opportunity score — веса", "Opportunity score — weights")</MudText>
+        <MudNumericField T="double" @bind-Value="_m.WeightDemand" Label="@Txt.S("Спрос", "Demand")" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudNumericField T="double" @bind-Value="_m.WeightSuccess" Label="@Txt.S("Шанс успеха", "Chance of success")" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudNumericField T="double" @bind-Value="_m.WeightCompetition" Label="@Txt.S("Низкая конкуренция", "Low competition")" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudNumericField T="double" @bind-Value="_m.WeightTrend" Label="@Txt.S("Тренд", "Trend")" Min="0" Max="1" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
 
-        <MudText Typo="Typo.subtitle1" Class="mb-2">Горячее</MudText>
-        <MudText Typo="Typo.caption" Class="itch-muted d-block mb-2">Hot = (Δоценок за 7 дн + a·Δкомментариев + b·рост позиции) / (возраст в днях + 2)^g</MudText>
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@Txt.S("Горячее", "Hot")</MudText>
+        <MudText Typo="Typo.caption" Class="itch-muted d-block mb-2">@Txt.S("Hot = (Δоценок за 7 дн + a·Δкомментариев + b·рост позиции) / (возраст в днях + 2)^g", "Hot = (Δratings over 7 days + a·Δcomments + b·rank gain) / (age in days + 2)^g")</MudText>
         <div class="d-flex gap-2">
             <MudNumericField T="double" @bind-Value="_m.HotA" Label="a" Min="0" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" />
             <MudNumericField T="double" @bind-Value="_m.HotB" Label="b" Min="0" Step="0.05" Variant="Variant.Outlined" Margin="Margin.Dense" />
@@ -51,47 +51,48 @@
     </MudItem>
 
     <MudItem xs="12" md="6" lg="4">
-        <MudText Typo="Typo.subtitle1" Class="mb-2">Оценка аудитории</MudText>
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@Txt.S("Оценка аудитории", "Audience estimate")</MudText>
         <MudText Typo="Typo.caption" Class="itch-muted d-block mb-2">
-            Просмотры ≈ оценки / доля оценивающих. Без API-ключа используются отраслевые допущения; с ключом («Моя игра») — ваши реальные соотношения.
+            @Txt.S("Просмотры ≈ оценки / доля оценивающих. Без API-ключа используются отраслевые допущения; с ключом («Моя игра») — ваши реальные соотношения.",
+                   "Views ≈ ratings / share of visitors who rate. Without an API key, industry assumptions are used; with a key (My game), your real ratios are used.")
         </MudText>
-        <MudNumericField T="double" @bind-Value="_m.RaterShare" Label="Доля оценивающих от просмотров" Min="0.0001" Max="1" Step="0.001" Format="0.####" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudNumericField T="double" @bind-Value="_m.RaterShare" Label="@Txt.S("Доля оценивающих от просмотров", "Share of viewers who rate")" Min="0.0001" Max="1" Step="0.001" Format="0.####" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
         <div class="d-flex gap-2 mb-3">
-            <MudNumericField T="double" @bind-Value="_m.RaterShareLow" Label="Нижняя" Min="0.0001" Max="1" Step="0.001" Format="0.####" Variant="Variant.Outlined" Margin="Margin.Dense" />
-            <MudNumericField T="double" @bind-Value="_m.RaterShareHigh" Label="Верхняя" Min="0.0001" Max="1" Step="0.001" Format="0.####" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudNumericField T="double" @bind-Value="_m.RaterShareLow" Label="@Txt.S("Нижняя", "Lower")" Min="0.0001" Max="1" Step="0.001" Format="0.####" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudNumericField T="double" @bind-Value="_m.RaterShareHigh" Label="@Txt.S("Верхняя", "Upper")" Min="0.0001" Max="1" Step="0.001" Format="0.####" Variant="Variant.Outlined" Margin="Margin.Dense" />
         </div>
-        <MudNumericField T="double" @bind-Value="_m.WebPlayShare" Label="Доля запусков в браузере от просмотров" Min="0" Max="1" Step="0.01" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-        <MudNumericField T="double" @bind-Value="_m.DownloadShare" Label="Доля скачиваний от просмотров" Min="0" Max="1" Step="0.01" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudNumericField T="double" @bind-Value="_m.WebPlayShare" Label="@Txt.S("Доля запусков в браузере от просмотров", "Share of views that become browser plays")" Min="0" Max="1" Step="0.01" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudNumericField T="double" @bind-Value="_m.DownloadShare" Label="@Txt.S("Доля скачиваний от просмотров", "Share of views that become downloads")" Min="0" Max="1" Step="0.01" Variant="Variant.Outlined" Margin="Margin.Dense" />
     </MudItem>
 
     <MudItem xs="12" lg="8">
-        <MudText Typo="Typo.subtitle1" Class="mb-2">Объём сбора</MudText>
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@Txt.S("Объём сбора", "Crawl volume")</MudText>
         <MudGrid Spacing="2">
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.QuickTopTags" Label="Быстрый: тегов" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.QuickPagesPerList" Label="Быстрый: стр. на тег" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.QuickDetails" Label="Быстрый: страниц игр" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.JamEntriesPerRun" Label="Джемов с участниками за запуск" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyPopularTags" Label="Ежедн.: тегов popular" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyPopularPages" Label="Ежедн.: стр. popular" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyTopRatedPages" Label="Ежедн.: стр. top-rated на тег" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyNewestMaxPages" Label="Ежедн.: стр. новинок" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyDetails" Label="Ежедн.: страниц игр" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyProfiles" Label="Ежедн.: профилей" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyBacklogPages" Label="Ежедн.: страниц глубокого сбора" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepListPages" Label="Глубокий: страниц списков" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="0 — пока каталог не закончится" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepMinTagProjects" Label="Глубокий: тег от N проектов" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepRefreshDays" Label="Перепроверять списки через, дней" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepDetails" Label="Глубокий: страниц игр" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepProfiles" Label="Глубокий: профилей" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.GamePagesPerRun" Label="Карточки: страниц за запуск" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="0 — все игры без карточки" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.QuickTopTags" Label="@Txt.S("Быстрый: тегов", "Quick: tags")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.QuickPagesPerList" Label="@Txt.S("Быстрый: стр. на тег", "Quick: pages per tag")" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.QuickDetails" Label="@Txt.S("Быстрый: страниц игр", "Quick: game pages")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.JamEntriesPerRun" Label="@Txt.S("Джемов с участниками за запуск", "Jams with entries per run")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyPopularTags" Label="@Txt.S("Ежедн.: тегов popular", "Daily: popular tags")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyPopularPages" Label="@Txt.S("Ежедн.: стр. popular", "Daily: popular pages")" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyTopRatedPages" Label="@Txt.S("Ежедн.: стр. top-rated на тег", "Daily: top-rated pages per tag")" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyNewestMaxPages" Label="@Txt.S("Ежедн.: стр. новинок", "Daily: new-release pages")" Min="1" Max="200" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyDetails" Label="@Txt.S("Ежедн.: страниц игр", "Daily: game pages")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyProfiles" Label="@Txt.S("Ежедн.: профилей", "Daily: profiles")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DailyBacklogPages" Label="@Txt.S("Ежедн.: страниц глубокого сбора", "Daily: deep-crawl pages")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepListPages" Label="@Txt.S("Глубокий: страниц списков", "Deep: list pages")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@Txt.S("0 — пока каталог не закончится", "0 — until the catalog ends")" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepMinTagProjects" Label="@Txt.S("Глубокий: тег от N проектов", "Deep: tag from N projects")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepRefreshDays" Label="@Txt.S("Перепроверять списки через, дней", "Recheck lists after, days")" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepDetails" Label="@Txt.S("Глубокий: страниц игр", "Deep: game pages")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.DeepProfiles" Label="@Txt.S("Глубокий: профилей", "Deep: profiles")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_m.GamePagesPerRun" Label="@Txt.S("Карточки: страниц за запуск", "Pages: game pages per run")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@Txt.S("0 — все игры без карточки", "0 — every game without a page")" /></MudItem>
         </MudGrid>
     </MudItem>
 
     <MudItem xs="12" Class="d-flex gap-2">
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">Сохранить</MudButton>
-        <MudButton Variant="Variant.Text" OnClick="Revert">Отменить изменения</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">@Txt.S("Сохранить", "Save")</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="Revert">@Txt.S("Отменить изменения", "Discard changes")</MudButton>
         <MudSpacer />
-        <MudButton Variant="Variant.Text" Color="Color.Warning" OnClick="ResetDefaults">Значения по умолчанию</MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Warning" OnClick="ResetDefaults">@Txt.S("Значения по умолчанию", "Defaults")</MudButton>
     </MudItem>
 </MudGrid>
 
@@ -129,7 +130,7 @@
         var weights = _m.WeightDemand + _m.WeightSuccess + _m.WeightCompetition + _m.WeightTrend;
         if (weights <= 0)
         {
-            Snackbar.Add("Сумма весов Opportunity должна быть больше нуля", Severity.Error);
+            Snackbar.Add(Txt.S("Сумма весов Opportunity должна быть больше нуля", "The Opportunity weights must add up to more than zero"), Severity.Error);
             return;
         }
         var current = Settings.Current;
@@ -140,6 +141,6 @@
         _m.DemandUsesMean = current.DemandUsesMean;
         await Settings.SaveAsync(_m);
         Revert();
-        Snackbar.Add("Настройки сохранены", Severity.Success);
+        Snackbar.Add(Txt.S("Настройки сохранены", "Settings saved"), Severity.Success);
     }
 }

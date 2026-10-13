@@ -1,10 +1,10 @@
 ﻿@page "/not-found"
 @layout MainLayout
 
-<PageTitle>Не найдено — ItchDB</PageTitle>
+<PageTitle>@Txt.S("Не найдено", "Not found") — ItchDB</PageTitle>
 
 <MudStack AlignItems="AlignItems.Center" Class="mt-16">
     <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Style="font-size: 4rem;" Color="Color.Primary" />
-    <MudText Typo="Typo.h5">Страница не найдена</MudText>
-    <MudButton Href="/" Variant="Variant.Outlined" Color="Color.Primary">На главную</MudButton>
+    <MudText Typo="Typo.h5">@Txt.S("Страница не найдена", "Page not found")</MudText>
+    <MudButton Href="/" Variant="Variant.Outlined" Color="Color.Primary">@Txt.S("На главную", "Home")</MudButton>
 </MudStack>

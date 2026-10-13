@@ -1,56 +1,58 @@
 @page "/tops"
 @inherits AnalyticsPage
 
-<PageTitle>Топы — ItchDB</PageTitle>
+<PageTitle>@Txt.S("Топы", "Tops") — ItchDB</PageTitle>
 
 <div class="d-flex flex-wrap align-center gap-3 mb-1">
-    <MudText Typo="Typo.h4">Топы</MudText>
+    <MudText Typo="Typo.h4">@Txt.S("Топы", "Tops")</MudText>
     <MudSpacer />
-    <MudSelect T="string" @bind-Value="_period" @bind-Value:after="RecomputeAsync" Label="Вышли" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Style="max-width:220px">
-        @foreach (var p in Periods)
+    <MudSelect T="string" @bind-Value="_period" @bind-Value:after="RecomputeAsync" Label="@Txt.S("Вышли", "Released")" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Style="max-width:220px">
+        @foreach (var p in PeriodKeys)
         {
-            <MudSelectItem T="string" Value="@p.Key">@p.Name</MudSelectItem>
+            <MudSelectItem T="string" Value="@p">@PeriodName(p)</MudSelectItem>
         }
     </MudSelect>
-    <MudSelect T="string" @bind-Value="_genre" @bind-Value:after="RecomputeAsync" Label="Жанр" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Style="max-width:220px">
-        <MudSelectItem T="string" Value="@Any">Все жанры</MudSelectItem>
-        @foreach (var g in ItchCatalog.Genres.OrderBy(g => g.RussianName))
+    <MudSelect T="string" @bind-Value="_genre" @bind-Value:after="RecomputeAsync" Label="@Txt.S("Жанр", "Genre")" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Style="max-width:220px">
+        <MudSelectItem T="string" Value="@Any">@Txt.S("Все жанры", "All genres")</MudSelectItem>
+        @foreach (var g in ItchCatalog.Genres.OrderBy(g => CatalogNames.Genre(g, TextLang.Current)))
         {
-            <MudSelectItem T="string" Value="@g.Slug">@g.RussianName</MudSelectItem>
+            <MudSelectItem T="string" Value="@g.Slug">@CatalogNames.Genre(g, TextLang.Current)</MudSelectItem>
         }
     </MudSelect>
 </div>
 <MudText Class="itch-muted mb-3">
-    Спрос — сколько людей оценили игру. Отзывы — качество с поправкой на малое число голосов. Горячее — кто набирает оценки прямо сейчас.
+    @Txt.S("Спрос — сколько людей оценили игру. Отзывы — качество с поправкой на малое число голосов. Горячее — кто набирает оценки прямо сейчас.",
+        "Demand is how many people rated the game. Reviews are quality adjusted for a small vote count. Hot is who is collecting ratings right now.")
 </MudText>
 
 <DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
     @if (_vm is { } vm)
     {
         <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3" @bind-ActivePanelIndex="_tab">
-            <MudTabPanel Text="По спросу">
-                <GamesTable Games="vm.Demand" Title="Больше всего оценок" Subtitle="число оценок ≈ размер аудитории" ExportName="top-demand" ShowWr="true" BayesMinVotes="A.Params.BayesMinVotes" />
+            <MudTabPanel Text="@Txt.S("По спросу", "By demand")">
+                <GamesTable Games="vm.Demand" Title="@Txt.S("Больше всего оценок", "Most ratings")" Subtitle="@Txt.S("число оценок ≈ размер аудитории", "rating count ≈ audience size")" ExportName="top-demand" ShowWr="true" BayesMinVotes="A.Params.BayesMinVotes" />
             </MudTabPanel>
-            <MudTabPanel Text="По отзывам">
-                <GamesTable Games="vm.Reviews" Title="Лучшие по оценкам" Subtitle="@($"взвешенный рейтинг, от {A.Params.BayesMinVotes} оценок")" ExportName="top-reviews" BayesMinVotes="A.Params.BayesMinVotes" />
+            <MudTabPanel Text="@Txt.S("По отзывам", "By reviews")">
+                <GamesTable Games="vm.Reviews" Title="@Txt.S("Лучшие по оценкам", "Best by rating")" Subtitle="@Txt.S($"взвешенный рейтинг, от {A.Params.BayesMinVotes} оценок", $"weighted rating, from {A.Params.BayesMinVotes} ratings")" ExportName="top-reviews" BayesMinVotes="A.Params.BayesMinVotes" />
             </MudTabPanel>
-            <MudTabPanel Text="Горячее">
+            <MudTabPanel Text="@Txt.S("Горячее", "Hot")">
                 @if (vm.Hot.Count == 0)
                 {
                     <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
-                        Для «Горячего» нужны снимки хотя бы за два дня: прирост оценок считается между ними. Оставьте приложение открытым — ежедневный сбор сделает это сам.
+                        @Txt.S("Для «Горячего» нужны снимки хотя бы за два дня: прирост оценок считается между ними. Оставьте приложение открытым — ежедневный сбор сделает это сам.",
+                            "“Hot” needs snapshots from at least two days: the rating gain is the difference between them. Leave the app open — the daily collection does this on its own.")
                     </MudAlert>
                 }
-                <GamesTable Games="vm.Hot" Title="Набирают оценки сейчас" Subtitle="@($"прирост за последние {DatasetLoader.DeltaWindowDays} дней с поправкой на возраст")" ExportName="top-hot" ShowHot="true" ShowDelta="true" ShowWr="false" BayesMinVotes="A.Params.BayesMinVotes" />
+                <GamesTable Games="vm.Hot" Title="@Txt.S("Набирают оценки сейчас", "Collecting ratings now")" Subtitle="@Txt.S($"прирост за последние {DatasetLoader.DeltaWindowDays} дней с поправкой на возраст", $"gain over the last {DatasetLoader.DeltaWindowDays} days, adjusted for age")" ExportName="top-hot" ShowHot="true" ShowDelta="true" ShowWr="false" BayesMinVotes="A.Params.BayesMinVotes" />
             </MudTabPanel>
-            <MudTabPanel Text="Новые и растущие">
-                <GamesTable Games="vm.Rising" Title="Новинки последних 90 дней" Subtitle="по числу оценок в день с момента выхода" ExportName="top-rising" ShowDelta="true" ShowWr="false" BayesMinVotes="A.Params.BayesMinVotes" />
+            <MudTabPanel Text="@Txt.S("Новые и растущие", "New and rising")">
+                <GamesTable Games="vm.Rising" Title="@Txt.S("Новинки последних 90 дней", "New in the last 90 days")" Subtitle="@Txt.S("по числу оценок в день с момента выхода", "by ratings per day since release")" ExportName="top-rising" ShowDelta="true" ShowWr="false" BayesMinVotes="A.Params.BayesMinVotes" />
             </MudTabPanel>
             <MudTabPanel Text="Featured">
-                <GamesTable Games="vm.Featured" Title="Выбор редакции itch.io" Subtitle="от последних к ранним" ExportName="top-featured" ShowFeatured="true" ShowRank="false" BayesMinVotes="A.Params.BayesMinVotes" />
+                <GamesTable Games="vm.Featured" Title="@Txt.S("Выбор редакции itch.io", "itch.io editorial picks")" Subtitle="@Txt.S("от последних к ранним", "newest first")" ExportName="top-featured" ShowFeatured="true" ShowRank="false" BayesMinVotes="A.Params.BayesMinVotes" />
             </MudTabPanel>
-            <MudTabPanel Text="Обсуждаемые">
-                <GamesTable Games="vm.Comments" Title="Больше всего комментариев" ExportName="top-comments" ShowWr="false" BayesMinVotes="A.Params.BayesMinVotes" />
+            <MudTabPanel Text="@Txt.S("Обсуждаемые", "Discussed")">
+                <GamesTable Games="vm.Comments" Title="@Txt.S("Больше всего комментариев", "Most comments")" ExportName="top-comments" ShowWr="false" BayesMinVotes="A.Params.BayesMinVotes" />
             </MudTabPanel>
         </MudTabs>
     }
@@ -60,13 +62,23 @@
     private const string Any = "any";
     private const int Take = 500;
 
-    private static readonly (string Key, string Name, int? Days)[] Periods =
+    private static readonly (string Key, int? Days)[] Periods =
     [
-        ("all", "За всё время", null),
-        ("365", "За последний год", 365),
-        ("90", "За 90 дней", 90),
-        ("30", "За 30 дней", 30),
+        ("all", null),
+        ("365", 365),
+        ("90", 90),
+        ("30", 30),
     ];
+
+    private static readonly string[] PeriodKeys = ["all", "365", "90", "30"];
+
+    private string PeriodName(string key) => key switch
+    {
+        "365" => Txt.S("За последний год", "Last year"),
+        "90" => Txt.S("За 90 дней", "Last 90 days"),
+        "30" => Txt.S("За 30 дней", "Last 30 days"),
+        _ => Txt.S("За всё время", "All time"),
+    };
 
     private sealed record Vm(List<GameRow> Demand, List<GameRow> Reviews, List<GameRow> Hot, List<GameRow> Rising, List<GameRow> Featured, List<GameRow> Comments);
 

@@ -1,11 +1,12 @@
 @page "/developers"
 @inherits AnalyticsPage
 
-<PageTitle>Разработчики — ItchDB</PageTitle>
+<PageTitle>@Txt.S("Разработчики", "Developers") — ItchDB</PageTitle>
 
-<MudText Typo="Typo.h4">Разработчики</MudText>
+<MudText Typo="Typo.h4">@Txt.S("Разработчики", "Developers")</MudText>
 <MudText Class="itch-muted mb-3">
-    Авторы игр из базы: у кого больше подписчиков и оценок, кто быстро растёт и как опыт автора связан с успехом его игр.
+    @Txt.S("Авторы игр из базы: у кого больше подписчиков и оценок, кто быстро растёт и как опыт автора связан с успехом его игр.",
+           "Authors in the database: who has more followers and ratings, who is growing fast, and how an author's experience relates to how their games do.")
 </MudText>
 
 <DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
@@ -14,24 +15,24 @@
         <MudGrid Spacing="3" Class="mb-1">
             <MudItem xs="6" md="3">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Разработчиков в базе" Value="@Fmt.N(vm.Rows.Count)" Large="true" Hint="@($"с известными подписчиками: {Fmt.N(vm.WithFollowers)}")" />
+                    <Kpi Label="@Txt.S("Разработчиков в базе", "Developers in the database")" Value="@Fmt.N(vm.Rows.Count)" Large="true" Hint="@Txt.S($"с известными подписчиками: {Fmt.N(vm.WithFollowers)}", $"with a known follower count: {Fmt.N(vm.WithFollowers)}")" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="3">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Одна игра в базе" Value="@Fmt.Pct(vm.SingleGameShare)" Large="true" Hint="доля авторов"
-                         Tip="Большинство авторов на itch.io выпускают одну-две игры. В базе видны не все игры автора, только собранные." />
+                    <Kpi Label="@Txt.S("Одна игра в базе", "One game in the database")" Value="@Fmt.Pct(vm.SingleGameShare)" Large="true" Hint="@Txt.S("доля авторов", "share of authors")"
+                         Tip="@Txt.S("Большинство авторов на itch.io выпускают одну-две игры. В базе видны не все игры автора, только собранные.", "Most itch.io authors release one or two games. The database only includes the games that have been collected, not every game by the author.")" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="3">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Топ-1% авторов" Value="@Fmt.Pct(vm.Top1Share)" Large="true" Hint="всех оценок в базе"
-                         Tip="Доля оценок, которая приходится на 1% самых оценённых разработчиков. Показывает, насколько внимание аудитории сосредоточено у немногих." />
+                    <Kpi Label="@Txt.S("Топ-1% авторов", "Top 1% of authors")" Value="@Fmt.Pct(vm.Top1Share)" Large="true" Hint="@Txt.S("всех оценок в базе", "of all ratings in the database")"
+                         Tip="@Txt.S("Доля оценок, которая приходится на 1% самых оценённых разработчиков. Показывает, насколько внимание аудитории сосредоточено у немногих.", "Share of ratings that belongs to the 1% of developers with the most ratings. Shows how concentrated the audience is.")" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="3">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Медиана подписчиков" Value="@Fmt.N(vm.MedianFollowers, 0)" Large="true" Hint="у авторов с известным числом" />
+                    <Kpi Label="@Txt.S("Медиана подписчиков", "Median followers")" Value="@Fmt.N(vm.MedianFollowers, 0)" Large="true" Hint="@Txt.S("у авторов с известным числом", "among authors with a known count")" />
                 </MudPaper>
             </MudItem>
         </MudGrid>
@@ -40,17 +41,17 @@
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Outlined="true" Style="height:100%">
                     <div class="itch-section-title">
-                        Опыт автора и оценки его игр
-                        <FormulaTip Title="Опыт автора" Formula="медиана оценок игр, сгруппированных по числу игр автора в базе"
-                                    Text="Опытные авторы чаще набирают оценки: у них есть подписчики и навык. Но часть их старых игр в базу могла не попасть." />
+                        @Txt.S("Опыт автора и оценки его игр", "Author experience and ratings")
+                        <FormulaTip Title="@Txt.S("Опыт автора", "Author experience")" Formula="@Txt.S("медиана оценок игр, сгруппированных по числу игр автора в базе", "median ratings of games, grouped by how many of the author's games are in the database")"
+                                    Text="@Txt.S("Опытные авторы чаще набирают оценки: у них есть подписчики и навык. Но часть их старых игр в базу могла не попасть.", "Experienced authors more often collect ratings: they have followers and skill. Some of their older games may be missing from the database.")" />
                     </div>
                     <MudSimpleTable Dense="true" Elevation="0" Style="background:transparent">
-                        <thead><tr><th>Игр у автора</th><th style="text-align:right">Авторов</th><th style="text-align:right">Игр</th><th style="text-align:right">Медиана оценок</th><th style="text-align:right">Шанс @A.Params.SuccessThreshold+</th></tr></thead>
+                        <thead><tr><th>@Txt.S("Игр у автора", "Games by the author")</th><th style="text-align:right">@Txt.S("Авторов", "Authors")</th><th style="text-align:right">@Txt.S("Игр", "Games")</th><th style="text-align:right">@Txt.S("Медиана оценок", "Median ratings")</th><th style="text-align:right">@Txt.S($"Шанс {A.Params.SuccessThreshold}+", $"Chance of {A.Params.SuccessThreshold}+")</th></tr></thead>
                         <tbody>
                             @foreach (var b in vm.Experience)
                             {
                                 <tr>
-                                    <td>@b.Label</td>
+                                    <td>@BucketLabel(b.Label)</td>
                                     <td class="itch-num" style="text-align:right">@Fmt.N(b.Developers)</td>
                                     <td class="itch-num" style="text-align:right">@Fmt.N(b.Games)</td>
                                     <td class="itch-num" style="text-align:right"><b>@Fmt.N(b.Median, 0)</b></td>
@@ -63,18 +64,19 @@
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Outlined="true" Style="height:100%">
-                    <div class="itch-section-title">Быстрее всех набирают подписчиков</div>
+                    <div class="itch-section-title">@Txt.S("Быстрее всех набирают подписчиков", "Fastest follower growth")</div>
                     @if (vm.Growing.Count == 0)
                     {
                         <MudText Typo="Typo.body2" Class="itch-muted">
-                            Рост считается по снимкам профилей минимум за неделю. Ежедневный сбор обновляет профили — через несколько дней здесь появятся лидеры.
+                            @Txt.S("Рост считается по снимкам профилей минимум за неделю. Ежедневный сбор обновляет профили — через несколько дней здесь появятся лидеры.",
+                                   "Growth is measured from profile snapshots at least a week apart. The daily crawl updates profiles — leaders show up here after a few days.")
                         </MudText>
                     }
                     @foreach (var d in vm.Growing)
                     {
                         <div class="d-flex align-center py-1 gap-2">
                             <MudLink Href="@($"/developers/{d.Id}")" Style="flex:1">@d.Name</MudLink>
-                            <span class="itch-muted itch-num" style="font-size:.82rem">@Fmt.N(d.Followers) подп.</span>
+                            <span class="itch-muted itch-num" style="font-size:.82rem">@Txt.S($"{Fmt.N(d.Followers)} подп.", $"{Fmt.N(d.Followers)} followers")</span>
                             <b class="itch-num" style="color:#4CC38A;width:80px;text-align:right">@Fmt.Signed(d.Delta30)</b>
                         </div>
                     }
@@ -82,33 +84,33 @@
             </MudItem>
         </MudGrid>
 
-        <MudTable T="DevStat" Items="vm.Rows" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" SortLabel="Сортировка"
+        <MudTable T="DevStat" Items="vm.Rows" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" SortLabel="@Txt.SortLabel"
                   Class="itch-table mt-3" Elevation="0" Filter="Matches">
             <ToolBarContent>
-                <MudText Typo="Typo.h6">Все разработчики</MudText>
+                <MudText Typo="Typo.h6">@Txt.S("Все разработчики", "All developers")</MudText>
                 <MudSpacer />
-                <MudTextField T="string" @bind-Value="_search" Placeholder="Поиск" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                <MudTextField T="string" @bind-Value="_search" Placeholder="@Txt.SearchPlaceholder" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                               Immediate="true" DebounceInterval="300" Variant="Variant.Outlined" Margin="Margin.Dense" Class="itch-search mr-2" />
-                <MudSwitch T="bool" @bind-Value="_onlyWithFollowers" Color="Color.Primary" Label="С подписчиками" Class="mr-2" />
+                <MudSwitch T="bool" @bind-Value="_onlyWithFollowers" Color="Color.Primary" Label="@Txt.S("С подписчиками", "With followers")" Class="mr-2" />
                 <ExportMenu T="DevStat" Name="developers" Rows="@(() => vm.Rows.Where(Matches))" Columns="ExportColumns" />
             </ToolBarContent>
             <HeaderContent>
-                <MudTh><MudTableSortLabel T="DevStat" SortBy="d => d.Name">Разработчик</MudTableSortLabel></MudTh>
-                <MudTh Style="text-align:right"><MudTableSortLabel T="DevStat" SortBy="d => d.Followers ?? -1" InitialDirection="SortDirection.Descending">Подписчики</MudTableSortLabel></MudTh>
-                <MudTh Style="text-align:right"><MudTableSortLabel T="DevStat" SortBy="d => d.Delta30 ?? int.MinValue">За 30 дней</MudTableSortLabel></MudTh>
-                <MudTh Style="text-align:right"><MudTableSortLabel T="DevStat" SortBy="d => d.Games">Игр</MudTableSortLabel></MudTh>
-                <MudTh Style="text-align:right"><MudTableSortLabel T="DevStat" SortBy="d => d.SumRatings">Оценок всего</MudTableSortLabel></MudTh>
-                <MudTh Style="text-align:right"><MudTableSortLabel T="DevStat" SortBy="d => double.IsNaN(d.Median) ? -1 : d.Median">Медиана</MudTableSortLabel></MudTh>
-                <MudTh>Самая оценённая игра</MudTh>
+                <MudTh><MudTableSortLabel T="DevStat" SortBy="d => d.Name">@Txt.S("Разработчик", "Developer")</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="DevStat" SortBy="d => d.Followers ?? -1" InitialDirection="SortDirection.Descending">@Txt.S("Подписчики", "Followers")</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="DevStat" SortBy="d => d.Delta30 ?? int.MinValue">@Txt.S("За 30 дней", "Last 30 days")</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="DevStat" SortBy="d => d.Games">@Txt.S("Игр", "Games")</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="DevStat" SortBy="d => d.SumRatings">@Txt.S("Оценок всего", "Ratings total")</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="DevStat" SortBy="d => double.IsNaN(d.Median) ? -1 : d.Median">@Txt.S("Медиана", "Median")</MudTableSortLabel></MudTh>
+                <MudTh>@Txt.S("Самая оценённая игра", "Highest-rated game")</MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd DataLabel="Разработчик"><MudLink Href="@($"/developers/{context.Id}")">@context.Name</MudLink></MudTd>
-                <MudTd DataLabel="Подписчики" Class="itch-num" Style="text-align:right">@Fmt.N(context.Followers)</MudTd>
-                <MudTd DataLabel="За 30 дней" Class="itch-num" Style="text-align:right">@Fmt.Signed(context.Delta30)</MudTd>
-                <MudTd DataLabel="Игр" Class="itch-num" Style="text-align:right">@Fmt.N(context.Games)</MudTd>
-                <MudTd DataLabel="Оценок" Class="itch-num" Style="text-align:right">@Fmt.N(context.SumRatings)</MudTd>
-                <MudTd DataLabel="Медиана" Class="itch-num" Style="text-align:right">@Fmt.N(context.Median, 0)</MudTd>
-                <MudTd DataLabel="Игра">
+                <MudTd DataLabel="@Txt.S("Разработчик", "Developer")"><MudLink Href="@($"/developers/{context.Id}")">@context.Name</MudLink></MudTd>
+                <MudTd DataLabel="@Txt.S("Подписчики", "Followers")" Class="itch-num" Style="text-align:right">@Fmt.N(context.Followers)</MudTd>
+                <MudTd DataLabel="@Txt.S("За 30 дней", "Last 30 days")" Class="itch-num" Style="text-align:right">@Fmt.Signed(context.Delta30)</MudTd>
+                <MudTd DataLabel="@Txt.S("Игр", "Games")" Class="itch-num" Style="text-align:right">@Fmt.N(context.Games)</MudTd>
+                <MudTd DataLabel="@Txt.S("Оценок", "Ratings")" Class="itch-num" Style="text-align:right">@Fmt.N(context.SumRatings)</MudTd>
+                <MudTd DataLabel="@Txt.S("Медиана", "Median")" Class="itch-num" Style="text-align:right">@Fmt.N(context.Median, 0)</MudTd>
+                <MudTd DataLabel="@Txt.S("Игра", "Game")">
                     @if (context.Best is { } best)
                     {
                         <MudLink Href="@($"/games/{best.Id}")">@best.Title</MudLink>
@@ -117,7 +119,7 @@
                 </MudTd>
             </RowTemplate>
             <PagerContent>
-                <MudTablePager RowsPerPageString="Строк:" InfoFormat="{first_item}–{last_item} из {all_items}" PageSizeOptions="new[] { 25, 50, 100, 250 }" />
+                <MudTablePager RowsPerPageString="@Txt.RowsLabel" InfoFormat="@Txt.PagerInfo" PageSizeOptions="new[] { 25, 50, 100, 250 }" />
             </PagerContent>
         </MudTable>
     }
@@ -132,6 +134,15 @@
     private Vm? _vm;
     private string? _search;
     private bool _onlyWithFollowers;
+
+    private string BucketLabel(string label) => label switch
+    {
+        "1 игра" => Txt.S("1 игра", "1 game"),
+        "2–4 игры" => Txt.S("2–4 игры", "2–4 games"),
+        "5–9 игр" => Txt.S("5–9 игр", "5–9 games"),
+        "10+ игр" => Txt.S("10+ игр", "10+ games"),
+        _ => label,
+    };
 
     private bool Matches(DevStat d) =>
         (!_onlyWithFollowers || d.Followers is not null)
@@ -175,17 +186,17 @@
             experience, growing);
     }
 
-    private static readonly IReadOnlyList<ExportColumn<DevStat>> ExportColumns =
+    private IReadOnlyList<ExportColumn<DevStat>> ExportColumns =>
     [
-        new("Разработчик", d => d.Name),
-        new("Профиль", d => d.Url),
-        new("Подписчики", d => d.Followers),
-        new("Подписчиков за 30 дней", d => d.Delta30),
-        new("Игр в базе", d => d.Games),
-        new("Игр с оценками", d => d.Rated),
-        new("Оценок всего", d => d.SumRatings),
-        new("Медиана оценок", d => double.IsNaN(d.Median) ? null : d.Median),
-        new("Самая оценённая игра", d => d.Best?.Title),
-        new("Оценок у неё", d => d.Best?.Ratings),
+        new(Txt.S("Разработчик", "Developer"), d => d.Name),
+        new(Txt.S("Профиль", "Profile"), d => d.Url),
+        new(Txt.S("Подписчики", "Followers"), d => d.Followers),
+        new(Txt.S("Подписчиков за 30 дней", "Followers in 30 days"), d => d.Delta30),
+        new(Txt.S("Игр в базе", "Games in the database"), d => d.Games),
+        new(Txt.S("Игр с оценками", "Games with ratings"), d => d.Rated),
+        new(Txt.S("Оценок всего", "Ratings total"), d => d.SumRatings),
+        new(Txt.S("Медиана оценок", "Median ratings"), d => double.IsNaN(d.Median) ? null : d.Median),
+        new(Txt.S("Самая оценённая игра", "Highest-rated game"), d => d.Best?.Title),
+        new(Txt.S("Оценок у неё", "Its ratings"), d => d.Best?.Ratings),
     ];
 }

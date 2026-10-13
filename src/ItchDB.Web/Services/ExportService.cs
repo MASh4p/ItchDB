@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text;
+using ItchDB.Core;
+using ItchDB.Core.Catalog;
 using ClosedXML.Excel;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -82,7 +84,7 @@ public sealed class ExportService(IJSRuntime js)
                     case long l: cell.Value = l; break;
                     case decimal m: cell.Value = m; break;
                     case DateTime t: cell.Value = t; break;
-                    case bool b: cell.Value = b ? "да" : "нет"; break;
+                    case bool b: cell.Value = CatalogNames.Pick(TextLang.Current, b ? "да" : "нет", b ? "yes" : "no"); break;
                     case var other: cell.Value = other.ToString(); break;
                 }
             }

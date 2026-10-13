@@ -2,11 +2,11 @@
 @inherits AnalyticsPage
 @inject DataQueries Queries
 
-<PageTitle>@(_jam?.Title ?? "Джем") — ItchDB</PageTitle>
+<PageTitle>@(_jam?.Title ?? Txt.S("Джем", "Jam")) — ItchDB</PageTitle>
 
 @if (_loaded && _jam is null)
 {
-    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Джем не найден в базе.</MudAlert>
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">@Txt.S("Джем не найден в базе.", "This jam is not in the database.")</MudAlert>
 }
 else if (_jam is { } jam)
 {
@@ -15,14 +15,14 @@ else if (_jam is { } jam)
         <span style="color:@Jams.StateColor(Jams.StateOf(jam, DateTime.UtcNow))">@Jams.StateName(Jams.StateOf(jam, DateTime.UtcNow))</span>
         <MudSpacer />
         <MudButton Href="@($"{ItchCatalog.BaseUrl}/jam/{jam.Slug}")" Target="_blank" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
-                   EndIcon="@Icons.Material.Filled.OpenInNew">Страница джема</MudButton>
+                   EndIcon="@Icons.Material.Filled.OpenInNew">@Txt.S("Страница джема", "Jam page")</MudButton>
     </div>
     <MudText Class="itch-muted mb-3">
         @if (!string.IsNullOrEmpty(jam.Hosts))
         {
-            <span>Организаторы: @jam.Hosts. </span>
+            <span>@Txt.S($"Организаторы: {jam.Hosts}. ", $"Hosts: {jam.Hosts}. ")</span>
         }
-        @Fmt.Date(jam.StartAt) — @Fmt.Date(jam.EndAt)@(jam.VotingEndAt is { } v ? $", голосование до {Fmt.Date(v)}" : "").
+        @Fmt.Date(jam.StartAt) — @Fmt.Date(jam.EndAt)@(jam.VotingEndAt is { } v ? Txt.S($", голосование до {Fmt.Date(v)}", $", voting until {Fmt.Date(v)}") : "").
     </MudText>
 
     <DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
@@ -31,35 +31,35 @@ else if (_jam is { } jam)
             <MudGrid Spacing="3" Class="mb-1">
                 <MudItem xs="6" md="2">
                     <MudPaper Class="pa-4 itch-card" Outlined="true">
-                        <Kpi Label="Записались / работ" Value="@($"{Fmt.N(jam.Joined)} / {Fmt.N(jam.Submissions)}")" Large="true"
-                             Hint="@(jam is { Joined: > 0, Submissions: { } s } ? $"сдали {Fmt.Pct((double)s / jam.Joined.Value)}" : null)" />
+                        <Kpi Label="@Txt.S("Записались / работ", "Joined / submissions")" Value="@($"{Fmt.N(jam.Joined)} / {Fmt.N(jam.Submissions)}")" Large="true"
+                             Hint="@(jam is { Joined: > 0, Submissions: { } s } ? Txt.S($"сдали {Fmt.Pct((double)s / jam.Joined.Value)}", $"finished {Fmt.Pct((double)s / jam.Joined.Value)}") : null)" />
                     </MudPaper>
                 </MudItem>
                 <MudItem xs="6" md="2">
                     <MudPaper Class="pa-4 itch-card" Outlined="true">
-                        <Kpi Label="Работ в базе" Value="@Fmt.N(vm.Rows.Count)" Large="true" Hint="@($"из них в каталоге игр: {Fmt.N(vm.Known)}")" />
+                        <Kpi Label="@Txt.S("Работ в базе", "Entries in the database")" Value="@Fmt.N(vm.Rows.Count)" Large="true" Hint="@Txt.S($"из них в каталоге игр: {Fmt.N(vm.Known)}", $"of those in the game catalog: {Fmt.N(vm.Known)}")" />
                     </MudPaper>
                 </MudItem>
                 <MudItem xs="6" md="2">
                     <MudPaper Class="pa-4 itch-card" Outlined="true">
-                        <Kpi Label="Медиана оценок в джеме" Value="@Fmt.N(vm.MedianJamRatings, 0)" Large="true" Hint="сколько участников оценили работу" />
+                        <Kpi Label="@Txt.S("Медиана оценок в джеме", "Median ratings in the jam")" Value="@Fmt.N(vm.MedianJamRatings, 0)" Large="true" Hint="@Txt.S("сколько участников оценили работу", "how many participants rated the entry")" />
                     </MudPaper>
                 </MudItem>
                 <MudItem xs="6" md="2">
                     <MudPaper Class="pa-4 itch-card" Outlined="true">
-                        <Kpi Label="Медиана оценок на itch.io" Value="@Fmt.N(vm.MedianItchRatings, 0)" Large="true" Hint="у тех же игр сейчас" />
+                        <Kpi Label="@Txt.S("Медиана оценок на itch.io", "Median ratings on itch.io")" Value="@Fmt.N(vm.MedianItchRatings, 0)" Large="true" Hint="@Txt.S("у тех же игр сейчас", "those same games now")" />
                     </MudPaper>
                 </MudItem>
                 <MudItem xs="6" md="2">
                     <MudPaper Class="pa-4 itch-card" Outlined="true">
-                        <Kpi Label="@($"Набрали {A.Params.SuccessThreshold}+ на itch.io")" Value="@Fmt.Pct(vm.SuccessShare, 1)" Large="true" Hint="среди игр из каталога" Color="#4CC38A" />
+                        <Kpi Label="@Txt.S($"Набрали {A.Params.SuccessThreshold}+ на itch.io", $"Reached {A.Params.SuccessThreshold}+ on itch.io")" Value="@Fmt.Pct(vm.SuccessShare, 1)" Large="true" Hint="@Txt.S("среди игр из каталога", "among games in the catalog")" Color="#4CC38A" />
                     </MudPaper>
                 </MudItem>
                 <MudItem xs="6" md="2">
                     <MudPaper Class="pa-4 itch-card" Outlined="true">
-                        <Kpi Label="Связь джема и itch.io" Value="@(double.IsNaN(vm.Rho) ? "—" : vm.Rho.ToString("+0.00;−0.00;0", Fmt.Ru))" Large="true"
-                             Hint="@(double.IsNaN(vm.Rho) ? "нужно ≥ 10 игр с обоими числами" : RhoText(vm.Rho))"
-                             Tip="Ранговая корреляция Спирмена между оценками в джеме и оценками на itch.io сейчас. Высокая — успех в джеме переносится на страницу игры." />
+                        <Kpi Label="@Txt.S("Связь джема и itch.io", "Jam vs itch.io")" Value="@(double.IsNaN(vm.Rho) ? "—" : vm.Rho.ToString("+0.00;−0.00;0", Fmt.Ru))" Large="true"
+                             Hint="@(double.IsNaN(vm.Rho) ? Txt.S("нужно ≥ 10 игр с обоими числами", "needs ≥ 10 games with both numbers") : RhoText(vm.Rho))"
+                             Tip="@Txt.S("Ранговая корреляция Спирмена между оценками в джеме и оценками на itch.io сейчас. Высокая — успех в джеме переносится на страницу игры.", "Spearman rank correlation between ratings in the jam and ratings on itch.io now. High means jam success carries over to the game page.")" />
                     </MudPaper>
                 </MudItem>
             </MudGrid>
@@ -67,30 +67,31 @@ else if (_jam is { } jam)
             @if (vm.Rows.Count == 0)
             {
                 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                    Участники этого джема ещё не собраны. Ежедневный сбор забирает участников нескольких крупных джемов за раз.
+                    @Txt.S("Участники этого джема ещё не собраны. Ежедневный сбор забирает участников нескольких крупных джемов за раз.",
+                           "Entries for this jam have not been collected yet. The daily crawl takes entries from a few large jams each run.")
                 </MudAlert>
             }
             else
             {
-                <MudTable T="EntryRow" Items="vm.Rows" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" SortLabel="Сортировка"
+                <MudTable T="EntryRow" Items="vm.Rows" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" SortLabel="@Txt.SortLabel"
                           Class="itch-table" Elevation="0" Filter="Matches">
                     <ToolBarContent>
-                        <MudText Typo="Typo.h6">Работы</MudText>
+                        <MudText Typo="Typo.h6">@Txt.S("Работы", "Entries")</MudText>
                         <MudSpacer />
-                        <MudTextField T="string" @bind-Value="_search" Placeholder="Поиск" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                        <MudTextField T="string" @bind-Value="_search" Placeholder="@Txt.SearchPlaceholder" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                                       Immediate="true" DebounceInterval="300" Variant="Variant.Outlined" Margin="Margin.Dense" Class="itch-search mr-2" />
                         <ExportMenu T="EntryRow" Name="@($"jam-{jam.Slug}")" Rows="@(() => vm.Rows.Where(Matches))" Columns="ExportColumns" />
                     </ToolBarContent>
                     <HeaderContent>
-                        <MudTh><MudTableSortLabel T="EntryRow" SortBy="r => r.Title">Игра</MudTableSortLabel></MudTh>
-                        <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.Entry.JamRatingCount ?? -1" InitialDirection="SortDirection.Descending">Оценок в джеме</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="EntryRow" SortBy="r => r.Title">@Txt.S("Игра", "Game")</MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.Entry.JamRatingCount ?? -1" InitialDirection="SortDirection.Descending">@Txt.S("Оценок в джеме", "Ratings in the jam")</MudTableSortLabel></MudTh>
                         <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.Entry.Coolness ?? -1">Coolness</MudTableSortLabel></MudTh>
-                        <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.Game != null ? r.Game.Ratings : -1">Оценок на itch.io</MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.Game != null ? r.Game.Ratings : -1">@Txt.S("Оценок на itch.io", "Ratings on itch.io")</MudTableSortLabel></MudTh>
                         <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.Game != null && r.Game.RatingAvg != null ? r.Game.RatingAvg.Value : -1">★</MudTableSortLabel></MudTh>
-                        <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.After ?? -1">После джема</MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="EntryRow" SortBy="r => r.After ?? -1">@Txt.S("После джема", "After the jam")</MudTableSortLabel></MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd DataLabel="Игра">
+                        <MudTd DataLabel="@Txt.S("Игра", "Game")">
                             @if (context.Game is { } g)
                             {
                                 <GameCell Game="g" ShowCover="true" />
@@ -101,18 +102,19 @@ else if (_jam is { } jam)
                                 <div class="itch-game-sub">@context.Entry.AuthorName</div>
                             }
                         </MudTd>
-                        <MudTd DataLabel="Оценок в джеме" Class="itch-num" Style="text-align:right">@Fmt.N(context.Entry.JamRatingCount)</MudTd>
+                        <MudTd DataLabel="@Txt.S("Оценок в джеме", "Ratings in the jam")" Class="itch-num" Style="text-align:right">@Fmt.N(context.Entry.JamRatingCount)</MudTd>
                         <MudTd DataLabel="Coolness" Class="itch-num" Style="text-align:right">@Fmt.N(context.Entry.Coolness, 0)</MudTd>
-                        <MudTd DataLabel="Оценок" Class="itch-num" Style="text-align:right">@(context.Game is { } g1 ? Fmt.N(g1.Ratings) : "—")</MudTd>
+                        <MudTd DataLabel="@Txt.S("Оценок", "Ratings")" Class="itch-num" Style="text-align:right">@(context.Game is { } g1 ? Fmt.N(g1.Ratings) : "—")</MudTd>
                         <MudTd DataLabel="★" Class="itch-num" Style="text-align:right">@Fmt.Stars(context.Game?.RatingAvg)</MudTd>
-                        <MudTd DataLabel="После джема" Class="itch-num" Style="text-align:right">@Fmt.Times(context.After)</MudTd>
+                        <MudTd DataLabel="@Txt.S("После джема", "After the jam")" Class="itch-num" Style="text-align:right">@Fmt.Times(context.After)</MudTd>
                     </RowTemplate>
                     <PagerContent>
-                        <MudTablePager RowsPerPageString="Строк:" InfoFormat="{first_item}–{last_item} из {all_items}" PageSizeOptions="new[] { 25, 50, 100, 250 }" />
+                        <MudTablePager RowsPerPageString="@Txt.RowsLabel" InfoFormat="@Txt.PagerInfo" PageSizeOptions="new[] { 25, 50, 100, 250 }" />
                     </PagerContent>
                 </MudTable>
                 <MudText Typo="Typo.caption" Class="itch-muted">
-                    «После джема» — во сколько раз оценок на itch.io больше, чем оценок внутри джема. Больше ×1 — игру продолжили находить после джема.
+                    @Txt.S("«После джема» — во сколько раз оценок на itch.io больше, чем оценок внутри джема. Больше ×1 — игру продолжили находить после джема.",
+                           "“After the jam” is how many times more ratings the game has on itch.io than inside the jam. Above ×1 means people kept finding the game after the jam.")
                 </MudText>
             }
         }
@@ -146,12 +148,12 @@ else if (_jam is { } jam)
         string.IsNullOrWhiteSpace(_search) || r.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
         || (r.Entry.AuthorName?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false);
 
-    private static string RhoText(double rho) => Math.Abs(rho) switch
+    private string RhoText(double rho) => Math.Abs(rho) switch
     {
-        >= 0.5 => "сильная связь",
-        >= 0.3 => "заметная связь",
-        >= 0.1 => "слабая связь",
-        _ => "связи почти нет",
+        >= 0.5 => Txt.S("сильная связь", "strong link"),
+        >= 0.3 => Txt.S("заметная связь", "noticeable link"),
+        >= 0.1 => Txt.S("слабая связь", "weak link"),
+        _ => Txt.S("связи почти нет", "almost no link"),
     };
 
     protected override void Compute()
@@ -180,15 +182,15 @@ else if (_jam is { } jam)
             rho);
     }
 
-    private static readonly IReadOnlyList<ExportColumn<EntryRow>> ExportColumns =
+    private IReadOnlyList<ExportColumn<EntryRow>> ExportColumns =>
     [
-        new("Игра", r => r.Title),
-        new("Автор", r => r.Game?.AuthorName ?? r.Entry.AuthorName),
-        new("Ссылка", r => r.Game?.Url ?? r.Entry.Url),
-        new("Оценок в джеме", r => r.Entry.JamRatingCount),
+        new(Txt.S("Игра", "Game"), r => r.Title),
+        new(Txt.S("Автор", "Author"), r => r.Game?.AuthorName ?? r.Entry.AuthorName),
+        new(Txt.S("Ссылка", "Link"), r => r.Game?.Url ?? r.Entry.Url),
+        new(Txt.S("Оценок в джеме", "Ratings in the jam"), r => r.Entry.JamRatingCount),
         new("Coolness", r => r.Entry.Coolness),
-        new("Оценок на itch.io", r => r.Game?.Ratings),
-        new("Средняя оценка", r => r.Game?.RatingAvg),
-        new("После джема, раз", r => r.After),
+        new(Txt.S("Оценок на itch.io", "Ratings on itch.io"), r => r.Game?.Ratings),
+        new(Txt.S("Средняя оценка", "Average rating"), r => r.Game?.RatingAvg),
+        new(Txt.S("После джема, раз", "After the jam, times"), r => r.After),
     ];
 }

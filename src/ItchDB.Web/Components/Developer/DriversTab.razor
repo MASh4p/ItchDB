@@ -1,15 +1,15 @@
 @* What goes along with more ratings: uplift per feature and the OLS model controlling for age. *@
 
 <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3">
-    <b>Корреляция ≠ причинность.</b> Здесь показано, что <i>сопутствует</i> большему числу оценок, а не что его вызывает.
-    Например, у популярных игр больше скриншотов отчасти потому, что их авторы вообще больше вкладываются в игру и её страницу.
-    Используйте как подсказку, где искать, а не как рецепт.
+    <b>@Txt.S("Корреляция ≠ причинность.", "Correlation is not causation.")</b> @Txt.S("Здесь показано, что сопутствует большему числу оценок, а не что его вызывает. Например, у популярных игр больше скриншотов отчасти потому, что их авторы вообще больше вкладываются в игру и её страницу. Используйте как подсказку, где искать, а не как рецепт.",
+           "This shows what goes along with more ratings, not what causes them. Popular games have more screenshots partly because their authors invest more in the game and its page. Use it as a hint for where to look, not as a recipe.")
 </MudAlert>
 
 @if (Report.Sample < 2 * Drivers.MinGroupSize)
 {
     <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-        Для анализа нужны игры с прочитанными страницами (полные теги, скриншоты, статус). Сейчас их @Report.Sample — запустите глубокий сбор.
+        @Txt.S($"Для анализа нужны игры с прочитанными страницами (полные теги, скриншоты, статус). Сейчас их {Report.Sample} — запустите глубокий сбор.",
+               $"The analysis needs games whose pages have been read (full tags, screenshots, status). There are {Report.Sample} now — run a deep crawl.")
     </MudAlert>
 }
 else
@@ -17,62 +17,62 @@ else
     <MudGrid Spacing="3" Class="mb-2">
         <MudItem xs="6" md="3">
             <MudPaper Class="pa-4 itch-card" Outlined="true">
-                <Kpi Label="Выборка" Value="@Fmt.N(Report.Sample)" Large="true" Hint="игр с прочитанной страницей"
-                     Tip="Только у этих игр известны все теги, скриншоты, статус и отметка об ИИ." />
+                <Kpi Label="@Txt.S("Выборка", "Sample")" Value="@Fmt.N(Report.Sample)" Large="true" Hint="@Txt.S("игр с прочитанной страницей", "games with a page read")"
+                     Tip="@Txt.S("Только у этих игр известны все теги, скриншоты, статус и отметка об ИИ.", "Only these games have every tag, screenshot count, status, and AI disclosure.")" />
             </MudPaper>
         </MudItem>
         <MudItem xs="6" md="3">
             <MudPaper Class="pa-4 itch-card" Outlined="true">
-                <Kpi Label="Качество модели (R²)" Value="@(Report.RSquared is { } r2 ? r2.ToString("0.00", Fmt.Ru) : "—")" Large="true"
-                     Hint="@(Report.RSquared is null ? $"нужно ≥ 200 игр с прочитанными страницами, сейчас {Fmt.N(Report.Sample)}" : $"{Report.ModelFeatures} факторов + возраст и скриншоты")"
-                     Formula="log(1 + оценки) = β₀ + β₁·log(1 + возраст) + β₂·log(1 + скриншоты) + Σ βᵢ·фактор"
-                     Tip="Доля разброса log(оценок), которую объясняют факторы. Остальное — сама игра: идея, качество, удача, продвижение." />
+                <Kpi Label="@Txt.S("Качество модели (R²)", "Model fit (R²)")" Value="@(Report.RSquared is { } r2 ? r2.ToString("0.00", Fmt.Ru) : "—")" Large="true"
+                     Hint="@(Report.RSquared is null ? Txt.S($"нужно ≥ 200 игр с прочитанными страницами, сейчас {Fmt.N(Report.Sample)}", $"needs ≥ 200 games with pages read, currently {Fmt.N(Report.Sample)}") : Txt.S($"{Report.ModelFeatures} факторов + возраст и скриншоты", $"{Report.ModelFeatures} factors + age and screenshots"))"
+                     Formula="@Txt.S("log(1 + оценки) = β₀ + β₁·log(1 + возраст) + β₂·log(1 + скриншоты) + Σ βᵢ·фактор", "log(1 + ratings) = β₀ + β₁·log(1 + age) + β₂·log(1 + screenshots) + Σ βᵢ·factor")"
+                     Tip="@Txt.S("Доля разброса log(оценок), которую объясняют факторы. Остальное — сама игра: идея, качество, удача, продвижение.", "Share of the spread in log(ratings) that the factors explain. The rest is the game itself: idea, quality, luck, promotion.")" />
             </MudPaper>
         </MudItem>
         <MudItem xs="6" md="3">
             <MudPaper Class="pa-4 itch-card" Outlined="true">
-                <Kpi Label="Возраст ×2" Value="@Fmt.Times(Report.AgeDoublingMultiplier)" Large="true" Hint="к числу оценок"
-                     Tip="Во сколько раз больше оценок у игры, которая вдвое старше, при прочих равных." />
+                <Kpi Label="@Txt.S("Возраст ×2", "Age ×2")" Value="@Fmt.Times(Report.AgeDoublingMultiplier)" Large="true" Hint="@Txt.S("к числу оценок", "to the rating count")"
+                     Tip="@Txt.S("Во сколько раз больше оценок у игры, которая вдвое старше, при прочих равных.", "How many times more ratings a game has when it is twice as old, all else equal.")" />
             </MudPaper>
         </MudItem>
         <MudItem xs="6" md="3">
             <MudPaper Class="pa-4 itch-card" Outlined="true">
-                <Kpi Label="Скриншотов ×2" Value="@Fmt.Times(Report.ScreenshotsDoublingMultiplier)" Large="true" Hint="к числу оценок"
-                     Tip="Во сколько раз больше оценок у игры с вдвое большим числом скриншотов, при прочих равных." />
+                <Kpi Label="@Txt.S("Скриншотов ×2", "Screenshots ×2")" Value="@Fmt.Times(Report.ScreenshotsDoublingMultiplier)" Large="true" Hint="@Txt.S("к числу оценок", "to the rating count")"
+                     Tip="@Txt.S("Во сколько раз больше оценок у игры с вдвое большим числом скриншотов, при прочих равных.", "How many times more ratings a game has with twice as many screenshots, all else equal.")" />
             </MudPaper>
         </MudItem>
     </MudGrid>
 
-    <MudTable T="DriverResult" Items="Report.Results" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" SortLabel="Сортировка"
+    <MudTable T="DriverResult" Items="Report.Results" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" SortLabel="@Txt.SortLabel"
               Class="itch-table mb-3" Elevation="0" Filter="Matches">
         <ToolBarContent>
-            <MudText Typo="Typo.h6">Факторы</MudText>
+            <MudText Typo="Typo.h6">@Txt.S("Факторы", "Factors")</MudText>
             <MudSpacer />
-            <MudSwitch T="bool" @bind-Value="_onlySignificant" Color="Color.Primary" Label="Только значимые" Class="mr-2" />
+            <MudSwitch T="bool" @bind-Value="_onlySignificant" Color="Color.Primary" Label="@Txt.S("Только значимые", "Significant only")" Class="mr-2" />
             <ExportMenu T="DriverResult" Name="success-drivers" Rows="@(() => Report.Results.Where(Matches))" Columns="ExportColumns" />
         </ToolBarContent>
         <HeaderContent>
-            <MudTh><MudTableSortLabel T="DriverResult" SortBy="r => r.Name">Фактор</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel T="DriverResult" SortBy="r => r.Group">Группа</MudTableSortLabel></MudTh>
-            <MudTh Style="text-align:right"><MudTableSortLabel T="DriverResult" SortBy="r => r.With">Игр с / без</MudTableSortLabel></MudTh>
-            <MudTh Style="text-align:right">Медиана с / без</MudTh>
-            <MudTh Style="text-align:right">Шанс ≥ @SuccessThreshold с / без</MudTh>
+            <MudTh><MudTableSortLabel T="DriverResult" SortBy="r => r.Name">@Txt.S("Фактор", "Factor")</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel T="DriverResult" SortBy="r => r.Group">@Txt.S("Группа", "Group")</MudTableSortLabel></MudTh>
+            <MudTh Style="text-align:right"><MudTableSortLabel T="DriverResult" SortBy="r => r.With">@Txt.S("Игр с / без", "Games with / without")</MudTableSortLabel></MudTh>
+            <MudTh Style="text-align:right">@Txt.S("Медиана с / без", "Median with / without")</MudTh>
+            <MudTh Style="text-align:right">@Txt.S($"Шанс ≥ {SuccessThreshold} с / без", $"Chance ≥ {SuccessThreshold} with / without")</MudTh>
             <MudTh Style="text-align:right">
                 <MudTableSortLabel T="DriverResult" SortBy="r => r.Uplift.HasValue ? r.Uplift.Value.Ratio : 0">Uplift</MudTableSortLabel>
                 <FormulaTip Title="@Formulas.Uplift.Title" Formula="@Formulas.Uplift.Formula" Text="@Formulas.Uplift.Text" />
             </MudTh>
             <MudTh Style="text-align:right">
-                <MudTableSortLabel T="DriverResult" SortBy="r => r.Multiplier ?? 0" InitialDirection="SortDirection.Descending">Множитель</MudTableSortLabel>
+                <MudTableSortLabel T="DriverResult" SortBy="r => r.Multiplier ?? 0" InitialDirection="SortDirection.Descending">@Txt.S("Множитель", "Multiplier")</MudTableSortLabel>
                 <FormulaTip Title="@Formulas.Multiplier.Title" Formula="@Formulas.Multiplier.Formula" Text="@Formulas.Multiplier.Text" />
             </MudTh>
             <MudTh Style="text-align:right">p</MudTh>
         </HeaderContent>
         <RowTemplate>
-            <MudTd DataLabel="Фактор">@context.Name</MudTd>
-            <MudTd DataLabel="Группа" Class="itch-muted">@context.Group</MudTd>
-            <MudTd DataLabel="Игр" Class="itch-num" Style="text-align:right">@Fmt.N(context.With) / @Fmt.N(context.Without)</MudTd>
-            <MudTd DataLabel="Медиана" Class="itch-num" Style="text-align:right">@Fmt.N(context.MedianWith, 0) / @Fmt.N(context.MedianWithout, 0)</MudTd>
-            <MudTd DataLabel="Шанс" Class="itch-num" Style="text-align:right">@Fmt.Pct(context.SuccessWith, 1) / @Fmt.Pct(context.SuccessWithout, 1)</MudTd>
+            <MudTd DataLabel="@Txt.S("Фактор", "Factor")">@context.Name</MudTd>
+            <MudTd DataLabel="@Txt.S("Группа", "Group")" Class="itch-muted">@context.Group</MudTd>
+            <MudTd DataLabel="@Txt.S("Игр", "Games")" Class="itch-num" Style="text-align:right">@Fmt.N(context.With) / @Fmt.N(context.Without)</MudTd>
+            <MudTd DataLabel="@Txt.S("Медиана", "Median")" Class="itch-num" Style="text-align:right">@Fmt.N(context.MedianWith, 0) / @Fmt.N(context.MedianWithout, 0)</MudTd>
+            <MudTd DataLabel="@Txt.S("Шанс", "Chance")" Class="itch-num" Style="text-align:right">@Fmt.Pct(context.SuccessWith, 1) / @Fmt.Pct(context.SuccessWithout, 1)</MudTd>
             <MudTd DataLabel="Uplift" Class="itch-num" Style="text-align:right">
                 @if (context.Uplift is { } u)
                 {
@@ -85,7 +85,7 @@ else
                     <span class="itch-muted">—</span>
                 }
             </MudTd>
-            <MudTd DataLabel="Множитель" Class="itch-num" Style="text-align:right">
+            <MudTd DataLabel="@Txt.S("Множитель", "Multiplier")" Class="itch-num" Style="text-align:right">
                 @if (context.Multiplier is { } m)
                 {
                     <MudTooltip Text="@($"95%: {Fmt.Times(context.MultiplierLow)} – {Fmt.Times(context.MultiplierHigh)}")">
@@ -97,10 +97,10 @@ else
                     <span class="itch-muted">—</span>
                 }
             </MudTd>
-            <MudTd DataLabel="p" Class="itch-num itch-muted" Style="text-align:right">@(context.PValue is { } p ? (p < 0.001 ? "<0,001" : p.ToString("0.000", Fmt.Ru)) : "—")</MudTd>
+            <MudTd DataLabel="p" Class="itch-num itch-muted" Style="text-align:right">@(context.PValue is { } p ? (p < 0.001 ? Txt.S("<0,001", "<0.001") : p.ToString("0.000", Fmt.Ru)) : "—")</MudTd>
         </RowTemplate>
         <PagerContent>
-            <MudTablePager RowsPerPageString="Строк:" InfoFormat="{first_item}–{last_item} из {all_items}" PageSizeOptions="new[] { 25, 50, 100 }" />
+            <MudTablePager RowsPerPageString="@Txt.RowsLabel" InfoFormat="@Txt.PagerInfo" PageSizeOptions="new[] { 25, 50, 100 }" />
         </PagerContent>
     </MudTable>
 
@@ -108,8 +108,8 @@ else
     {
         <MudPaper Class="pa-4" Outlined="true">
             <div class="itch-section-title">
-                Связь с числом оценок (ранговая корреляция Спирмена)
-                <FormulaTip Title="ρ Спирмена" Formula="ρ = корреляция рангов, от −1 до 1" Text="0 — связи нет, 0,3 — заметная, 0,5 и выше — сильная. Не учитывает другие факторы." />
+                @Txt.S("Связь с числом оценок (ранговая корреляция Спирмена)", "Link with the rating count (Spearman rank correlation)")
+                <FormulaTip Title="@Txt.S("ρ Спирмена", "Spearman ρ")" Formula="@Txt.S("ρ = корреляция рангов, от −1 до 1", "ρ = rank correlation, from −1 to 1")" Text="@Txt.S("0 — связи нет, 0,3 — заметная, 0,5 и выше — сильная. Не учитывает другие факторы.", "0 means no link, 0.3 is noticeable, 0.5 and above is strong. It does not account for other factors.")" />
             </div>
             @foreach (var c in Report.Correlations)
             {
@@ -137,21 +137,21 @@ else
 
     private IReadOnlyList<ExportColumn<DriverResult>> ExportColumns =>
     [
-        new("Фактор", r => r.Name),
-        new("Группа", r => r.Group),
-        new("Игр с фактором", r => r.With),
-        new("Игр без", r => r.Without),
-        new("Медиана с", r => r.MedianWith),
-        new("Медиана без", r => r.MedianWithout),
-        new($"Шанс ≥ {SuccessThreshold} с", r => r.SuccessWith),
-        new($"Шанс ≥ {SuccessThreshold} без", r => r.SuccessWithout),
+        new(Txt.S("Фактор", "Factor"), r => r.Name),
+        new(Txt.S("Группа", "Group"), r => r.Group),
+        new(Txt.S("Игр с фактором", "Games with the factor"), r => r.With),
+        new(Txt.S("Игр без", "Games without"), r => r.Without),
+        new(Txt.S("Медиана с", "Median with"), r => r.MedianWith),
+        new(Txt.S("Медиана без", "Median without"), r => r.MedianWithout),
+        new(Txt.S($"Шанс ≥ {SuccessThreshold} с", $"Chance ≥ {SuccessThreshold} with"), r => r.SuccessWith),
+        new(Txt.S($"Шанс ≥ {SuccessThreshold} без", $"Chance ≥ {SuccessThreshold} without"), r => r.SuccessWithout),
         new("Uplift", r => r.Uplift?.Ratio),
-        new("Uplift: нижняя граница", r => r.Uplift?.Low),
-        new("Uplift: верхняя граница", r => r.Uplift?.High),
-        new("Множитель", r => r.Multiplier),
-        new("Множитель: нижняя граница", r => r.MultiplierLow),
-        new("Множитель: верхняя граница", r => r.MultiplierHigh),
+        new(Txt.S("Uplift: нижняя граница", "Uplift: lower bound"), r => r.Uplift?.Low),
+        new(Txt.S("Uplift: верхняя граница", "Uplift: upper bound"), r => r.Uplift?.High),
+        new(Txt.S("Множитель", "Multiplier"), r => r.Multiplier),
+        new(Txt.S("Множитель: нижняя граница", "Multiplier: lower bound"), r => r.MultiplierLow),
+        new(Txt.S("Множитель: верхняя граница", "Multiplier: upper bound"), r => r.MultiplierHigh),
         new("p", r => r.PValue),
-        new("Значим", r => r.Significant),
+        new(Txt.S("Значим", "Significant"), r => r.Significant),
     ];
 }

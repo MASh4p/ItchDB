@@ -2,34 +2,34 @@
 @* Ranked segments (genres, tags, formats) with demand, competition, success and opportunity. *@
 
 <MudTable T="SegmentStats" Items="Visible" Dense="true" Hover="true" Striped="false" Breakpoint="Breakpoint.Sm"
-          RowsPerPage="@RowsPerPage" Filter="Matches" SortLabel="Сортировка" Class="itch-table" Elevation="0">
+          RowsPerPage="@RowsPerPage" Filter="Matches" SortLabel="@Txt.SortLabel" Class="itch-table" Elevation="0">
     <ToolBarContent>
         @if (Title is not null)
         {
             <MudText Typo="Typo.h6">@Title</MudText>
         }
         <MudSpacer />
-        <MudTextField T="string" @bind-Value="_search" Placeholder="Поиск" Adornment="Adornment.Start"
+        <MudTextField T="string" @bind-Value="_search" Placeholder="@Txt.SearchPlaceholder" Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Immediate="true"
                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="itch-search mr-2" />
         <SegmentFilters @bind-HideSmall="_hideSmall" />
         <ExportMenu T="SegmentStats" Name="@(ExportName ?? "segments")" Rows="@(() => Visible.Where(Matches))" Columns="ExportColumns" />
     </ToolBarContent>
     <HeaderContent>
-        <MudTh><MudTableSortLabel T="SegmentStats" SortBy="x => x.Name">Сегмент</MudTableSortLabel></MudTh>
+        <MudTh><MudTableSortLabel T="SegmentStats" SortBy="x => x.Name">@Txt.S("Сегмент", "Segment")</MudTableSortLabel></MudTh>
         <MudTh Style="text-align:right">
-            <MudTableSortLabel T="SegmentStats" SortBy="x => x.Denominator">@(Rows.FirstOrDefault()?.IncludesUnrated != false ? "Игр на itch.io" : "Игр с оценками")</MudTableSortLabel>
+            <MudTableSortLabel T="SegmentStats" SortBy="x => x.Denominator">@(Rows.FirstOrDefault()?.IncludesUnrated != false ? Txt.S("Игр на itch.io", "Games on itch.io") : Txt.S("Игр с оценками", "Rated games"))</MudTableSortLabel>
             <FormulaTip Title="@Formulas.Competition.Title" Formula="@Formulas.Competition.Formula" Text="@Formulas.Competition.Text" />
         </MudTh>
         <MudTh Style="text-align:right">
-            <MudTableSortLabel T="SegmentStats" SortBy="x => x.Qualified">С оценками ≥ @MinRatings</MudTableSortLabel>
+            <MudTableSortLabel T="SegmentStats" SortBy="x => x.Qualified">@Txt.S($"С оценками ≥ {MinRatings}", $"With ≥ {MinRatings} ratings")</MudTableSortLabel>
         </MudTh>
         <MudTh Style="text-align:right">
-            <MudTableSortLabel T="SegmentStats" SortBy="x => SortValue(Central(x))">@(Ui.DemandUsesMean ? "Среднее" : "Медиана")</MudTableSortLabel>
+            <MudTableSortLabel T="SegmentStats" SortBy="x => SortValue(Central(x))">@(Ui.DemandUsesMean ? Txt.S("Среднее", "Mean") : Txt.S("Медиана", "Median"))</MudTableSortLabel>
             <FormulaTip Title="@_central.Title" Formula="@_central.Formula" Text="@_central.Text" />
         </MudTh>
         <MudTh Style="text-align:right">
-            <MudTableSortLabel T="SegmentStats" SortBy="x => Adjusted(x)">Сглаж.</MudTableSortLabel>
+            <MudTableSortLabel T="SegmentStats" SortBy="x => Adjusted(x)">@Txt.S("Сглаж.", "Adj.")</MudTableSortLabel>
             <FormulaTip Title="@_adjusted.Title" Formula="@_adjusted.Formula" Text="@_adjusted.Text" />
         </MudTh>
         @if (!Compact)
@@ -40,17 +40,17 @@
             </MudTh>
         }
         <MudTh Style="text-align:right">
-            <MudTableSortLabel T="SegmentStats" SortBy="x => x.SuccessLow">Шанс ≥ @Params.SuccessThreshold</MudTableSortLabel>
+            <MudTableSortLabel T="SegmentStats" SortBy="x => x.SuccessLow">@Txt.S($"Шанс ≥ {Params.SuccessThreshold}", $"Chance ≥ {Params.SuccessThreshold}")</MudTableSortLabel>
             <FormulaTip Title="@_success.Title" Formula="@_success.Formula" Text="@_success.Text" />
         </MudTh>
         <MudTh Style="text-align:right">
-            <MudTableSortLabel T="SegmentStats" SortBy="x => x.Trend ?? double.MinValue">Тренд</MudTableSortLabel>
+            <MudTableSortLabel T="SegmentStats" SortBy="x => x.Trend ?? double.MinValue">@Txt.S("Тренд", "Trend")</MudTableSortLabel>
             <FormulaTip Title="@_trend.Title" Formula="@_trend.Formula" Text="@_trend.Text" />
         </MudTh>
         @if (!Compact)
         {
             <MudTh Style="text-align:right">
-                <MudTableSortLabel T="SegmentStats" SortBy="x => x.EntryThreshold ?? -1">Порог входа</MudTableSortLabel>
+                <MudTableSortLabel T="SegmentStats" SortBy="x => x.EntryThreshold ?? -1">@Txt.S("Порог входа", "Entry bar")</MudTableSortLabel>
                 <FormulaTip Title="@Formulas.Entry.Title" Formula="@Formulas.Entry.Formula" Text="@Formulas.Entry.Text" />
             </MudTh>
         }
@@ -61,42 +61,42 @@
                 <FormulaTip Title="@_opportunity.Title" Formula="@_opportunity.Formula" Text="@_opportunity.Text" />
             </MudTh>
             <MudTh>
-                Квадрант
+                @Txt.S("Квадрант", "Quadrant")
                 <FormulaTip Title="@Formulas.Quadrant.Title" Formula="@Formulas.Quadrant.Formula" Text="@Formulas.Quadrant.Text" />
             </MudTh>
         }
     </HeaderContent>
     <RowTemplate>
-        <MudTd DataLabel="Сегмент">
+        <MudTd DataLabel="@Txt.S("Сегмент", "Segment")">
             <MudLink Href="@($"/tags/{Uri.EscapeDataString(context.Key)}")">@context.Name</MudLink>
             @if (context.SmallSample)
             {
-                <MudTooltip Text="@($"Меньше {Params.MinSegmentSample} игр с оценками — выводы ненадёжны")">
-                    <span class="itch-muted ml-1" style="font-size:.75rem">мало данных</span>
+                <MudTooltip Text="@Txt.S($"Меньше {Params.MinSegmentSample} игр с оценками — выводы ненадёжны", $"Fewer than {Params.MinSegmentSample} rated games — the figures are unreliable")">
+                    <span class="itch-muted ml-1" style="font-size:.75rem">@Txt.S("мало данных", "thin data")</span>
                 </MudTooltip>
             }
         </MudTd>
-        <MudTd DataLabel="Игр на itch.io" Class="itch-num" Style="text-align:right">
+        <MudTd DataLabel="@Txt.S("Игр на itch.io", "Games on itch.io")" Class="itch-num" Style="text-align:right">
             @(context.DenominatorEstimated ? "≈ " : "")@Fmt.N(context.Denominator)
         </MudTd>
-        <MudTd DataLabel="С оценками" Class="itch-num" Style="text-align:right">@Fmt.N(context.Qualified)</MudTd>
-        <MudTd DataLabel="@(Ui.DemandUsesMean ? "Среднее" : "Медиана")" Class="itch-num" Style="text-align:right">@Fmt.N(Central(context), Ui.DemandUsesMean ? 1 : 0)</MudTd>
-        <MudTd DataLabel="Сглаж." Class="itch-num" Style="text-align:right"><b>@Fmt.N(Adjusted(context), 1)</b></MudTd>
+        <MudTd DataLabel="@Txt.S("С оценками", "Rated")" Class="itch-num" Style="text-align:right">@Fmt.N(context.Qualified)</MudTd>
+        <MudTd DataLabel="@(Ui.DemandUsesMean ? Txt.S("Среднее", "Mean") : Txt.S("Медиана", "Median"))" Class="itch-num" Style="text-align:right">@Fmt.N(Central(context), Ui.DemandUsesMean ? 1 : 0)</MudTd>
+        <MudTd DataLabel="@Txt.S("Сглаж.", "Adj.")" Class="itch-num" Style="text-align:right"><b>@Fmt.N(Adjusted(context), 1)</b></MudTd>
         @if (!Compact)
         {
             <MudTd DataLabel="P75 / P90" Class="itch-num" Style="text-align:right">@Fmt.N(context.P75, 0) / @Fmt.N(context.P90, 0)</MudTd>
         }
-        <MudTd DataLabel="Шанс" Class="itch-num" Style="text-align:right">
-            <MudTooltip Text="@($"95%: {Fmt.Pct(context.SuccessLow, 1)} – {Fmt.Pct(context.SuccessHigh, 1)}; успешных {Fmt.N(context.Successes)} из {Fmt.N(context.Denominator)}")">
+        <MudTd DataLabel="@Txt.S("Шанс", "Chance")" Class="itch-num" Style="text-align:right">
+            <MudTooltip Text="@Txt.S($"95%: {Fmt.Pct(context.SuccessLow, 1)} – {Fmt.Pct(context.SuccessHigh, 1)}; успешных {Fmt.N(context.Successes)} из {Fmt.N(context.Denominator)}", $"95%: {Fmt.Pct(context.SuccessLow, 1)} – {Fmt.Pct(context.SuccessHigh, 1)}; {Fmt.N(context.Successes)} successes of {Fmt.N(context.Denominator)}")">
                 @Fmt.Pct(context.SuccessShare, 1)
             </MudTooltip>
         </MudTd>
-        <MudTd DataLabel="Тренд" Class="itch-num" Style="@($"text-align:right;color:{TrendColor(context.Trend)}")">
+        <MudTd DataLabel="@Txt.S("Тренд", "Trend")" Class="itch-num" Style="@($"text-align:right;color:{TrendColor(context.Trend)}")">
             @(context.Trend is { } t ? Fmt.Signed(t * 100, 0, "%") : "—")
         </MudTd>
         @if (!Compact)
         {
-            <MudTd DataLabel="Порог входа" Class="itch-num" Style="text-align:right">@Fmt.N(context.EntryThreshold, 0)</MudTd>
+            <MudTd DataLabel="@Txt.S("Порог входа", "Entry bar")" Class="itch-num" Style="text-align:right">@Fmt.N(context.EntryThreshold, 0)</MudTd>
         }
         @if (ShowOpportunity)
         {
@@ -113,14 +113,14 @@
                     <span class="itch-muted">—</span>
                 }
             </MudTd>
-            <MudTd DataLabel="Квадрант"><QuadrantChip Value="context.Quadrant" /></MudTd>
+            <MudTd DataLabel="@Txt.S("Квадрант", "Quadrant")"><QuadrantChip @key="@($"{context.Key}:{Txt.Lang}")" Value="context.Quadrant" /></MudTd>
         }
     </RowTemplate>
     <PagerContent>
-        <MudTablePager RowsPerPageString="Строк:" InfoFormat="{first_item}–{last_item} из {all_items}" PageSizeOptions="new[] { 15, 25, 50, 100, 500 }" />
+        <MudTablePager RowsPerPageString="@Txt.RowsLabel" InfoFormat="@Txt.PagerInfo" PageSizeOptions="new[] { 15, 25, 50, 100, 500 }" />
     </PagerContent>
     <NoRecordsContent>
-        <MudText Class="itch-muted">Нет сегментов с данными.</MudText>
+        <MudText Class="itch-muted">@Txt.S("Нет сегментов с данными.", "No segments with data.")</MudText>
     </NoRecordsContent>
 </MudTable>
 
@@ -183,34 +183,34 @@
 
     private IReadOnlyList<ExportColumn<SegmentStats>> ExportColumns =>
     [
-        new("Сегмент", s => s.Name),
-        new("Ключ", s => s.Key),
-        new("Тип", s => Segments.KindName(s.Segment.Kind)),
-        new("Игр на itch.io", s => s.Denominator),
-        new("Знаменатель оценён", s => s.DenominatorEstimated),
-        new("Игр в базе", s => s.Known),
-        new("С оценками", s => s.Rated),
-        new($"С оценками ≥ {MinRatings}", s => s.Qualified),
-        new("Медиана", s => s.Median),
-        new("Сглаженная медиана", s => s.AdjMedian),
-        new("Среднее", s => s.Mean),
-        new("Сглаженное среднее", s => s.AdjMean),
+        new(Txt.S("Сегмент", "Segment"), s => s.Name),
+        new(Txt.S("Ключ", "Key"), s => s.Key),
+        new(Txt.S("Тип", "Kind"), s => Segments.KindName(s.Segment.Kind)),
+        new(Txt.S("Игр на itch.io", "Games on itch.io"), s => s.Denominator),
+        new(Txt.S("Знаменатель оценён", "Denominator estimated"), s => s.DenominatorEstimated),
+        new(Txt.S("Игр в базе", "Games in the database"), s => s.Known),
+        new(Txt.S("С оценками", "Rated"), s => s.Rated),
+        new(Txt.S($"С оценками ≥ {MinRatings}", $"With ≥ {MinRatings} ratings"), s => s.Qualified),
+        new(Txt.S("Медиана", "Median"), s => s.Median),
+        new(Txt.S("Сглаженная медиана", "Smoothed median"), s => s.AdjMedian),
+        new(Txt.S("Среднее", "Mean"), s => s.Mean),
+        new(Txt.S("Сглаженное среднее", "Smoothed mean"), s => s.AdjMean),
         new("P25", s => s.P25),
         new("P75", s => s.P75),
         new("P90", s => s.P90),
-        new("Средняя оценка ★", s => s.MedianStars),
-        new($"Успешных (≥ {Params.SuccessThreshold})", s => s.Successes),
-        new("Шанс успеха", s => s.SuccessShare),
-        new("Шанс: нижняя граница", s => s.SuccessLow),
-        new("Шанс: верхняя граница", s => s.SuccessHigh),
-        new("Тренд", s => s.Trend),
-        new("Порог входа", s => s.EntryThreshold),
-        new("Новых за неделю", s => s.ThisWeek),
-        new("Доля браузерных", s => s.WebShare),
-        new("Доля платных", s => s.PaidShare),
-        new("Медианная цена, $", s => s.MedianPaidPriceCents / 100),
+        new(Txt.S("Средняя оценка ★", "Average rating ★"), s => s.MedianStars),
+        new(Txt.S($"Успешных (≥ {Params.SuccessThreshold})", $"Successes (≥ {Params.SuccessThreshold})"), s => s.Successes),
+        new(Txt.S("Шанс успеха", "Success chance"), s => s.SuccessShare),
+        new(Txt.S("Шанс: нижняя граница", "Chance: lower bound"), s => s.SuccessLow),
+        new(Txt.S("Шанс: верхняя граница", "Chance: upper bound"), s => s.SuccessHigh),
+        new(Txt.S("Тренд", "Trend"), s => s.Trend),
+        new(Txt.S("Порог входа", "Entry bar"), s => s.EntryThreshold),
+        new(Txt.S("Новых за неделю", "New this week"), s => s.ThisWeek),
+        new(Txt.S("Доля браузерных", "Browser share"), s => s.WebShare),
+        new(Txt.S("Доля платных", "Paid share"), s => s.PaidShare),
+        new(Txt.S("Медианная цена, $", "Median price, $"), s => s.MedianPaidPriceCents / 100),
         new("Opportunity", s => s.Opportunity),
-        new("Квадрант", s => SegmentAnalyzer.QuadrantName(s.Quadrant)),
-        new("Мало данных", s => s.SmallSample),
+        new(Txt.S("Квадрант", "Quadrant"), s => SegmentAnalyzer.QuadrantName(s.Quadrant)),
+        new(Txt.S("Мало данных", "Thin data"), s => s.SmallSample),
     ];
 }

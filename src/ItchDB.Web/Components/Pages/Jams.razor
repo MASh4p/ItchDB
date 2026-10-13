@@ -2,11 +2,12 @@
 @inherits AnalyticsPage
 @inject DataQueries Queries
 
-<PageTitle>Джемы — ItchDB</PageTitle>
+<PageTitle>@Txt.S("Джемы", "Jams") — ItchDB</PageTitle>
 
-<MudText Typo="Typo.h4">Джемы</MudText>
+<MudText Typo="Typo.h4">@Txt.S("Джемы", "Jams")</MudText>
 <MudText Class="itch-muted mb-3">
-    Джемы — быстрый способ получить первых игроков и оценки. Здесь видно, какие джемы крупные, сколько участников доходит до сдачи и как игры с джемов живут потом.
+    @Txt.S("Джемы — быстрый способ получить первых игроков и оценки. Здесь видно, какие джемы крупные, сколько участников доходит до сдачи и как игры с джемов живут потом.",
+           "Jams are a fast way to get the first players and ratings. This shows which jams are large, how many participants finish a game, and how jam games do afterwards.")
 </MudText>
 
 <DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
@@ -15,73 +16,74 @@
         @if (vm.Rows.Count == 0)
         {
             <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
-                Джемов в базе пока нет. Их собирает ежедневный сбор (список джемов и участники нескольких крупных джемов за раз).
+                @Txt.S("Джемов в базе пока нет. Их собирает ежедневный сбор (список джемов и участники нескольких крупных джемов за раз).",
+                       "No jams in the database yet. The daily crawl collects them (the jam list, plus entries from a few large jams each run).")
             </MudAlert>
         }
         <MudGrid Spacing="3" Class="mb-1">
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Джемов в базе" Value="@Fmt.N(vm.Rows.Count)" Large="true" Hint="@($"с участниками: {Fmt.N(vm.WithEntries)}")" />
+                    <Kpi Label="@Txt.S("Джемов в базе", "Jams in the database")" Value="@Fmt.N(vm.Rows.Count)" Large="true" Hint="@Txt.S($"с участниками: {Fmt.N(vm.WithEntries)}", $"with entries: {Fmt.N(vm.WithEntries)}")" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Идут сейчас" Value="@Fmt.N(vm.Active)" Large="true" Hint="@($"скоро начнутся: {Fmt.N(vm.Upcoming)}")" Color="#4CC38A" />
+                    <Kpi Label="@Txt.S("Идут сейчас", "Live now")" Value="@Fmt.N(vm.Active)" Large="true" Hint="@Txt.S($"скоро начнутся: {Fmt.N(vm.Upcoming)}", $"starting soon: {Fmt.N(vm.Upcoming)}")" Color="#4CC38A" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Медиана работ" Value="@Fmt.N(vm.MedianSubmissions, 0)" Large="true" Hint="на джем" />
+                    <Kpi Label="@Txt.S("Медиана работ", "Median submissions")" Value="@Fmt.N(vm.MedianSubmissions, 0)" Large="true" Hint="@Txt.S("на джем", "per jam")" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Доходят до сдачи" Value="@Fmt.Pct(vm.MedianConversion)" Large="true" Hint="медиана: работ / записавшихся"
-                         Tip="Сколько записавшихся участников в итоге сдают игру. Большинство записавшихся не доходят до конца." />
+                    <Kpi Label="@Txt.S("Доходят до сдачи", "Finish a submission")" Value="@Fmt.Pct(vm.MedianConversion)" Large="true" Hint="@Txt.S("медиана: работ / записавшихся", "median: submissions / joined")"
+                         Tip="@Txt.S("Сколько записавшихся участников в итоге сдают игру. Большинство записавшихся не доходят до конца.", "How many people who joined actually submit a game. Most who join do not finish.")" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Игр с джемов" Value="@Fmt.N(vm.JamGames)" Large="true" Hint="@($"медиана оценок {Fmt.N(vm.JamMedian, 0)} против {Fmt.N(vm.OtherMedian, 0)}")"
-                         Tip="Игры, сделанные на джем, из общей базы: сравнение медианы оценок на itch.io с остальными играми." />
+                    <Kpi Label="@Txt.S("Игр с джемов", "Games from jams")" Value="@Fmt.N(vm.JamGames)" Large="true" Hint="@Txt.S($"медиана оценок {Fmt.N(vm.JamMedian, 0)} против {Fmt.N(vm.OtherMedian, 0)}", $"median ratings {Fmt.N(vm.JamMedian, 0)} vs {Fmt.N(vm.OtherMedian, 0)}")"
+                         Tip="@Txt.S("Игры, сделанные на джем, из общей базы: сравнение медианы оценок на itch.io с остальными играми.", "Jam games from the whole database: median itch.io ratings compared with the other games.")" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="@($"Шанс {A.Params.SuccessThreshold}+ у игр с джемов")" Value="@Fmt.Pct(vm.JamSuccess, 1)" Large="true"
-                         Hint="@($"у остальных {Fmt.Pct(vm.OtherSuccess, 1)} · среди известных игр")" />
+                    <Kpi Label="@Txt.S($"Шанс {A.Params.SuccessThreshold}+ у игр с джемов", $"Chance of {A.Params.SuccessThreshold}+ for jam games")" Value="@Fmt.Pct(vm.JamSuccess, 1)" Large="true"
+                         Hint="@Txt.S($"у остальных {Fmt.Pct(vm.OtherSuccess, 1)} · среди известных игр", $"other games {Fmt.Pct(vm.OtherSuccess, 1)} · among known games")" />
                 </MudPaper>
             </MudItem>
         </MudGrid>
 
-        <MudTable T="JamRow" Items="vm.Rows" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" SortLabel="Сортировка"
+        <MudTable T="JamRow" Items="vm.Rows" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50" SortLabel="@Txt.SortLabel"
                   Class="itch-table mt-3" Elevation="0" Filter="Matches">
             <ToolBarContent>
-                <MudText Typo="Typo.h6">Список джемов</MudText>
+                <MudText Typo="Typo.h6">@Txt.S("Список джемов", "Jam list")</MudText>
                 <MudSpacer />
                 <MudChipSet T="string" @bind-SelectedValue="_state" SelectionMode="SelectionMode.SingleSelection" CheckMark="false" Size="Size.Small"
                             SelectedColor="Color.Primary" Variant="Variant.Outlined" Class="mr-2">
-                    <MudChip T="string" Value="@("all")" Text="Все" />
-                    <MudChip T="string" Value="@("active")" Text="Идут" />
-                    <MudChip T="string" Value="@("upcoming")" Text="Скоро" />
-                    <MudChip T="string" Value="@("ended")" Text="Прошли" />
+                    <MudChip T="string" Value="@("all")" Text="@Txt.S("Все", "All")" />
+                    <MudChip T="string" Value="@("active")" Text="@Txt.S("Идут", "Live")" />
+                    <MudChip T="string" Value="@("upcoming")" Text="@Txt.S("Скоро", "Soon")" />
+                    <MudChip T="string" Value="@("ended")" Text="@Txt.S("Прошли", "Ended")" />
                 </MudChipSet>
-                <MudTextField T="string" @bind-Value="_search" Placeholder="Поиск" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                <MudTextField T="string" @bind-Value="_search" Placeholder="@Txt.SearchPlaceholder" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                               Immediate="true" DebounceInterval="300" Variant="Variant.Outlined" Margin="Margin.Dense" Class="itch-search mr-2" />
                 <ExportMenu T="JamRow" Name="jams" Rows="@(() => vm.Rows.Where(Matches))" Columns="ExportColumns" />
             </ToolBarContent>
             <HeaderContent>
-                <MudTh><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.Title">Джем</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.StartAt ?? DateTime.MinValue">Начало</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.EndAt ?? DateTime.MinValue" InitialDirection="SortDirection.Descending">Сдача до</MudTableSortLabel></MudTh>
-                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.Joined ?? -1">Записались</MudTableSortLabel></MudTh>
-                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.Submissions ?? -1">Работ</MudTableSortLabel></MudTh>
-                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Conversion ?? -1">Сдали</MudTableSortLabel></MudTh>
-                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Entries">В базе</MudTableSortLabel></MudTh>
-                <MudTh>Статус</MudTh>
+                <MudTh><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.Title">@Txt.S("Джем", "Jam")</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.StartAt ?? DateTime.MinValue">@Txt.S("Начало", "Starts")</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.EndAt ?? DateTime.MinValue" InitialDirection="SortDirection.Descending">@Txt.S("Сдача до", "Submit by")</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.Joined ?? -1">@Txt.S("Записались", "Joined")</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Jam.Submissions ?? -1">@Txt.S("Работ", "Submissions")</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Conversion ?? -1">@Txt.S("Сдали", "Finished")</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="JamRow" SortBy="j => j.Entries">@Txt.S("В базе", "In database")</MudTableSortLabel></MudTh>
+                <MudTh>@Txt.S("Статус", "Status")</MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd DataLabel="Джем">
+                <MudTd DataLabel="@Txt.S("Джем", "Jam")">
                     <MudLink Href="@($"/jams/{context.Jam.Id}")">@context.Jam.Title</MudLink>
                     @if (context.Jam.IsFeatured)
                     {
@@ -92,22 +94,22 @@
                         <div class="itch-game-sub">@context.Jam.Hosts</div>
                     }
                 </MudTd>
-                <MudTd DataLabel="Начало" Class="itch-num">@Fmt.Date(context.Jam.StartAt)</MudTd>
-                <MudTd DataLabel="Сдача до" Class="itch-num">@Fmt.Date(context.Jam.EndAt)</MudTd>
-                <MudTd DataLabel="Записались" Class="itch-num" Style="text-align:right">@Fmt.N(context.Jam.Joined)</MudTd>
-                <MudTd DataLabel="Работ" Class="itch-num" Style="text-align:right">@Fmt.N(context.Jam.Submissions)</MudTd>
-                <MudTd DataLabel="Сдали" Class="itch-num" Style="text-align:right">@Fmt.Pct(context.Conversion)</MudTd>
-                <MudTd DataLabel="В базе" Class="itch-num" Style="text-align:right">@(context.Entries > 0 ? Fmt.N(context.Entries) : "—")</MudTd>
-                <MudTd DataLabel="Статус">
+                <MudTd DataLabel="@Txt.S("Начало", "Starts")" Class="itch-num">@Fmt.Date(context.Jam.StartAt)</MudTd>
+                <MudTd DataLabel="@Txt.S("Сдача до", "Submit by")" Class="itch-num">@Fmt.Date(context.Jam.EndAt)</MudTd>
+                <MudTd DataLabel="@Txt.S("Записались", "Joined")" Class="itch-num" Style="text-align:right">@Fmt.N(context.Jam.Joined)</MudTd>
+                <MudTd DataLabel="@Txt.S("Работ", "Submissions")" Class="itch-num" Style="text-align:right">@Fmt.N(context.Jam.Submissions)</MudTd>
+                <MudTd DataLabel="@Txt.S("Сдали", "Finished")" Class="itch-num" Style="text-align:right">@Fmt.Pct(context.Conversion)</MudTd>
+                <MudTd DataLabel="@Txt.S("В базе", "In database")" Class="itch-num" Style="text-align:right">@(context.Entries > 0 ? Fmt.N(context.Entries) : "—")</MudTd>
+                <MudTd DataLabel="@Txt.S("Статус", "Status")">
                     <span style="color:@StateColor(context.State)">@StateName(context.State)</span>
                     @if (context.Jam.IsRanked)
                     {
-                        <span class="itch-muted"> · с оценками</span>
+                        <span class="itch-muted"> · @Txt.S("с оценками", "ranked")</span>
                     }
                 </MudTd>
             </RowTemplate>
             <PagerContent>
-                <MudTablePager RowsPerPageString="Строк:" InfoFormat="{first_item}–{last_item} из {all_items}" PageSizeOptions="new[] { 25, 50, 100, 250 }" />
+                <MudTablePager RowsPerPageString="@Txt.RowsLabel" InfoFormat="@Txt.PagerInfo" PageSizeOptions="new[] { 25, 50, 100, 250 }" />
             </PagerContent>
         </MudTable>
     }
@@ -155,10 +157,10 @@
 
     public static string StateName(JamState s) => s switch
     {
-        JamState.Upcoming => "скоро",
-        JamState.Active => "идёт",
-        JamState.Voting => "голосование",
-        JamState.Ended => "завершён",
+        JamState.Upcoming => CatalogNames.Pick(TextLang.Current, "скоро", "soon"),
+        JamState.Active => CatalogNames.Pick(TextLang.Current, "идёт", "live"),
+        JamState.Voting => CatalogNames.Pick(TextLang.Current, "голосование", "voting"),
+        JamState.Ended => CatalogNames.Pick(TextLang.Current, "завершён", "ended"),
         _ => "—",
     };
 
@@ -192,21 +194,21 @@
             Share(jamGames), Share(other));
     }
 
-    private static readonly IReadOnlyList<ExportColumn<JamRow>> ExportColumns =
+    private IReadOnlyList<ExportColumn<JamRow>> ExportColumns =>
     [
-        new("Джем", r => r.Jam.Title),
-        new("Организаторы", r => r.Jam.Hosts),
-        new("Ссылка", r => $"{ItchCatalog.BaseUrl}/jam/{r.Jam.Slug}"),
-        new("Начало", r => r.Jam.StartAt),
-        new("Сдача до", r => r.Jam.EndAt),
-        new("Голосование до", r => r.Jam.VotingEndAt),
-        new("Записались", r => r.Jam.Joined),
-        new("Работ", r => r.Jam.Submissions),
-        new("Доля сдавших", r => r.Conversion),
-        new("Оценок в джеме", r => r.Jam.RatingsCount),
-        new("Работ в базе", r => r.Entries),
-        new("С оценками", r => r.Jam.IsRanked),
+        new(Txt.S("Джем", "Jam"), r => r.Jam.Title),
+        new(Txt.S("Организаторы", "Hosts"), r => r.Jam.Hosts),
+        new(Txt.S("Ссылка", "Link"), r => $"{ItchCatalog.BaseUrl}/jam/{r.Jam.Slug}"),
+        new(Txt.S("Начало", "Starts"), r => r.Jam.StartAt),
+        new(Txt.S("Сдача до", "Submit by"), r => r.Jam.EndAt),
+        new(Txt.S("Голосование до", "Voting until"), r => r.Jam.VotingEndAt),
+        new(Txt.S("Записались", "Joined"), r => r.Jam.Joined),
+        new(Txt.S("Работ", "Submissions"), r => r.Jam.Submissions),
+        new(Txt.S("Доля сдавших", "Finish rate"), r => r.Conversion),
+        new(Txt.S("Оценок в джеме", "Ratings in the jam"), r => r.Jam.RatingsCount),
+        new(Txt.S("Работ в базе", "Entries in the database"), r => r.Entries),
+        new(Txt.S("С оценками", "Ranked"), r => r.Jam.IsRanked),
         new("Featured", r => r.Jam.IsFeatured),
-        new("Статус", r => StateName(r.State)),
+        new(Txt.S("Статус", "Status"), r => StateName(r.State)),
     ];
 }

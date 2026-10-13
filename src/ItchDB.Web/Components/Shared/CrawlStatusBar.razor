@@ -9,25 +9,25 @@
 <div class="d-flex align-center gap-1 mr-3">
     @if (Net.IsPaused && Net.PausedUntil is { } until)
     {
-        <MudTooltip Text="@(Net.Notice ?? (Net.ConsecutiveChallenges > 0 ? "itch.io показывает проверку. Откройте окно браузера и пройдите её. Новый запуск снимает паузу." : "Короткая пауза, сбор продолжится сам."))">
+        <MudTooltip Text="@(Net.Notice is { } pausedNotice ? CrawlText.L(pausedNotice) : (Net.ConsecutiveChallenges > 0 ? Txt.S("itch.io показывает проверку. Откройте окно браузера и пройдите её. Новый запуск снимает паузу.", "itch.io is showing a check. Open the browser window and complete it. A new run clears this pause.") : Txt.S("Короткая пауза, сбор продолжится сам.", "A short pause. The crawl will continue on its own.")))">
             <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.HourglassTop" OnClick="GoData">
-                @(Net.ConsecutiveChallenges > 0 ? "Cloudflare: пауза" : "Пауза") @Fmt.Countdown(until)
+                @(Net.ConsecutiveChallenges > 0 ? Txt.S("Cloudflare: пауза", "Cloudflare: paused") : Txt.S("Пауза", "Paused")) @Fmt.Countdown(until)
             </MudChip>
         </MudTooltip>
-        <MudTooltip Text="Открыть окно браузера и перейти на itch.io">
+        <MudTooltip Text="@Txt.S("Открыть окно браузера и перейти на itch.io", "Open the browser window and go to itch.io")">
             <MudIconButton Icon="@Icons.Material.Filled.OpenInBrowser" Size="Size.Small" OnClick="OpenBrowserAsync" />
         </MudTooltip>
     }
     else if (Net.Notice is { } notice)
     {
-        <MudTooltip Text="@notice">
-            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.OpenInBrowser" OnClick="GoData">Проверка в Chrome</MudChip>
+        <MudTooltip Text="@CrawlText.L(notice)">
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.OpenInBrowser" OnClick="GoData">@Txt.S("Проверка в Chrome", "Check in Chrome")</MudChip>
         </MudTooltip>
     }
     else if (Net.IsBlocked)
     {
-        <MudTooltip Text="Cloudflare не пропускает запросы. Откройте «Сбор данных» и импортируйте cf_clearance.">
-            <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Block" OnClick="GoData">Доступ ограничен</MudChip>
+        <MudTooltip Text="@Txt.S("Cloudflare не пропускает запросы. Откройте «Сбор данных» и импортируйте cf_clearance.", "Cloudflare is blocking requests. Open Data collection and import cf_clearance.")">
+            <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Block" OnClick="GoData">@Txt.S("Доступ ограничен", "Access limited")</MudChip>
         </MudTooltip>
     }
 
@@ -36,13 +36,13 @@
         <MudTooltip>
             <TooltipContent>
                 <div style="max-width:360px">
-                    <b>@(Crawl.Profile is { } p ? CrawlProfiles.Name(p) : "Сбор")</b><br />
-                    Задача @Crawl.JobIndex из @Crawl.JobCount: @Crawl.CurrentJob<br />
+                    <b>@(Crawl.Profile is { } p ? ProfileName(p) : Txt.S("Сбор", "Crawl"))</b><br />
+                    @Txt.S($"Задача {Crawl.JobIndex} из {Crawl.JobCount}: {CrawlText.L(Crawl.CurrentJob)}", $"Task {Crawl.JobIndex} of {Crawl.JobCount}: {CrawlText.L(Crawl.CurrentJob)}")<br />
                     @if (Crawl.StepText is { } step)
                     {
-                        <span class="itch-muted">@step</span><br />
+                        <span class="itch-muted">@CrawlText.L(step)</span><br />
                     }
-                    Запросов: @Fmt.N(Crawl.Requests), игр обновлено: @Fmt.N(Crawl.GamesUpserted)
+                    @Txt.S($"Запросов: {Fmt.N(Crawl.Requests)}, игр обновлено: {Fmt.N(Crawl.GamesUpserted)}", $"Requests: {Fmt.N(Crawl.Requests)}, games updated: {Fmt.N(Crawl.GamesUpserted)}")
                 </div>
             </TooltipContent>
             <ChildContent>
@@ -51,28 +51,28 @@
                     {
                         <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" Style="width:14px;height:14px" />
                     }
-                    @StateLabel · @Fmt.N(Crawl.Requests) запр.
+                    @StateLabel · @Txt.S($"{Fmt.N(Crawl.Requests)} запр.", $"{Fmt.N(Crawl.Requests)} req.")
                 </MudChip>
             </ChildContent>
         </MudTooltip>
         @if (Crawl.State == CrawlState.Running)
         {
-            <MudTooltip Text="Пауза">
+            <MudTooltip Text="@Txt.S("Пауза", "Pause")">
                 <MudIconButton Icon="@Icons.Material.Filled.Pause" Size="Size.Small" OnClick="Crawl.Pause" />
             </MudTooltip>
         }
         else if (Crawl.State == CrawlState.Paused)
         {
-            <MudTooltip Text="Продолжить">
+            <MudTooltip Text="@Txt.S("Продолжить", "Resume")">
                 <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" OnClick="Crawl.Resume" />
             </MudTooltip>
-            <MudTooltip Text="Открыть окно браузера и перейти на itch.io">
+            <MudTooltip Text="@Txt.S("Открыть окно браузера и перейти на itch.io", "Open the browser window and go to itch.io")">
                 <MudIconButton Icon="@Icons.Material.Filled.OpenInBrowser" Size="Size.Small" OnClick="OpenBrowserAsync" />
             </MudTooltip>
         }
         @if (Crawl.State != CrawlState.Stopping)
         {
-            <MudTooltip Text="Остановить (прогресс сохранится)">
+            <MudTooltip Text="@Txt.S("Остановить (прогресс сохранится)", "Stop (progress is kept)")">
                 <MudIconButton Icon="@Icons.Material.Filled.Stop" Size="Size.Small" OnClick="Crawl.Stop" />
             </MudTooltip>
         }
@@ -81,7 +81,7 @@
     {
         <MudTooltip Text="@_idleTip">
             <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="StartUpdateAsync">
-                Обновить
+                @Txt.S("Обновить", "Refresh")
             </MudButton>
         </MudTooltip>
     }
@@ -89,17 +89,28 @@
 
 @code {
     private Timer? _timer;
-    private string _idleTip = "Запустить обновление данных";
+    private string _idleTip = "";
 
     private string StateLabel => Crawl.State switch
     {
-        CrawlState.Paused => "Пауза",
-        CrawlState.Stopping => "Остановка…",
-        _ => "Сбор",
+        CrawlState.Paused => Txt.S("Пауза", "Paused"),
+        CrawlState.Stopping => Txt.S("Остановка…", "Stopping…"),
+        _ => Txt.S("Сбор", "Crawl"),
+    };
+
+    private string ProfileName(CrawlProfile p) => p switch
+    {
+        CrawlProfile.QuickStart => Txt.S("Быстрый старт", "Quick start"),
+        CrawlProfile.Deep => Txt.S("Глубокий сбор", "Deep crawl"),
+        CrawlProfile.Daily => Txt.S("Ежедневное обновление", "Daily update"),
+        CrawlProfile.Tracking => Txt.S("Проверка отслеживаемых игр", "Tracked games check"),
+        CrawlProfile.GamePages => Txt.S("Карточки игр", "Game pages"),
+        _ => p.ToString(),
     };
 
     protected override async Task OnInitializedAsync()
     {
+        _idleTip = Txt.S("Запустить обновление данных", "Start a data update");
         Crawl.Changed += OnChanged;
         Net.Changed += OnChanged;
         _timer = new Timer(_ => { if (Net.IsPaused) OnChanged(); }, null, 1000, 1000);
@@ -112,12 +123,12 @@
         {
             var (last, next) = await Crawl.GetScheduleAsync();
             _idleTip = last is null
-                ? "Данных ещё нет — запустится «Быстрый старт»"
-                : $"Ежедневное обновление. Последнее успешное: {Fmt.Ago(last)}" + (next is { } n ? $", следующее автоматически: {Fmt.Local(n)}" : "");
+                ? Txt.S("Данных ещё нет — запустится «Быстрый старт»", "No data yet — Quick start will run")
+                : Txt.S($"Ежедневное обновление. Последнее успешное: {Fmt.Ago(last)}", $"Daily update. Last success: {Fmt.Ago(last)}") + (next is { } n ? Txt.S($", следующее автоматически: {Fmt.Local(n)}", $", next automatic run: {Fmt.Local(n)}") : "");
         }
         catch (Exception)
         {
-            _idleTip = "Запустить обновление данных";
+            _idleTip = Txt.S("Запустить обновление данных", "Start a data update");
         }
     }
 
@@ -126,9 +137,9 @@
         var stats = await Coverage.LoadAsync();
         var profile = stats.Games == 0 ? CrawlProfile.QuickStart : CrawlProfile.Daily;
         if (Crawl.TryStart(profile, "кнопка «Обновить»"))
-            Snackbar.Add($"Запущено: {CrawlProfiles.Name(profile)}. Ход сбора — на странице «Сбор данных».", Severity.Info);
+            Snackbar.Add(Txt.S($"Запущено: {ProfileName(profile)}. Ход сбора — на странице «Сбор данных».", $"Started: {ProfileName(profile)}. Progress is on the Data collection page."), Severity.Info);
         else
-            Snackbar.Add("Сбор уже идёт", Severity.Warning);
+            Snackbar.Add(Txt.S("Сбор уже идёт", "A crawl is already running"), Severity.Warning);
     }
 
     private void GoData() => Nav.NavigateTo("/data");
@@ -139,11 +150,11 @@
         {
             var opened = await Browser.OpenForUserAsync(CancellationToken.None);
             if (!opened)
-                Snackbar.Add("Chrome и Edge не найдены. Откройте itch.io в своём браузере и пройдите проверку там.", Severity.Warning);
+                Snackbar.Add(Txt.S("Chrome и Edge не найдены. Откройте itch.io в своём браузере и пройдите проверку там.", "Chrome and Edge were not found. Open itch.io in your browser and complete the check there."), Severity.Warning);
         }
         catch (Exception ex)
         {
-            Snackbar.Add("Не удалось открыть окно браузера: " + ex.Message, Severity.Warning);
+            Snackbar.Add(Txt.S("Не удалось открыть окно браузера: ", "Could not open the browser window: ") + ex.Message, Severity.Warning);
         }
     }
 

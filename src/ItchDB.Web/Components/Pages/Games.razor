@@ -2,53 +2,53 @@
 @inherits AnalyticsPage
 @inject NavigationManager Nav
 
-<PageTitle>Игры — ItchDB</PageTitle>
+<PageTitle>@Txt.S("Игры", "Games") — ItchDB</PageTitle>
 
-<MudText Typo="Typo.h4">Игры</MudText>
-<MudText Class="itch-muted mb-3">Все собранные игры с фильтрами. Клик по названию открывает карточку игры с историей и позициями.</MudText>
+<MudText Typo="Typo.h4">@Txt.S("Игры", "Games")</MudText>
+<MudText Class="itch-muted mb-3">@Txt.S("Все собранные игры с фильтрами. Клик по названию открывает карточку игры с историей и позициями.", "Every collected game, with filters. The title opens the card with history and positions.")</MudText>
 
 <DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
     <MudPaper Class="pa-3 mb-3" Outlined="true">
         <MudGrid Spacing="2">
             <MudItem xs="12" sm="6" md="3">
-                <MudTextField T="string" @bind-Value="Q" @bind-Value:after="ApplyAsync" Label="Поиск" Placeholder="название или автор"
+                <MudTextField T="string" @bind-Value="Q" @bind-Value:after="ApplyAsync" Label="@Txt.S("Поиск", "Search")" Placeholder="@Txt.S("название или автор", "title or author")"
                               DebounceInterval="400" Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense"
                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
             </MudItem>
             <MudItem xs="6" sm="3" md="2">
-                <MudSelect T="string" @bind-Value="Genre" @bind-Value:after="ApplyAsync" Label="Жанр" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                    <MudSelectItem T="string" Value="@Any">Все жанры</MudSelectItem>
-                    @foreach (var g in ItchCatalog.Genres.OrderBy(g => g.RussianName))
+                <MudSelect T="string" @bind-Value="Genre" @bind-Value:after="ApplyAsync" Label="@Txt.S("Жанр", "Genre")" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    <MudSelectItem T="string" Value="@Any">@Txt.S("Все жанры", "All genres")</MudSelectItem>
+                    @foreach (var g in ItchCatalog.Genres.OrderBy(g => CatalogNames.Genre(g, TextLang.Current)))
                     {
-                        <MudSelectItem T="string" Value="@g.Slug">@g.RussianName</MudSelectItem>
+                        <MudSelectItem T="string" Value="@g.Slug">@CatalogNames.Genre(g, TextLang.Current)</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
             <MudItem xs="6" sm="3" md="2">
-                <MudAutocomplete T="string" @bind-Value="Tag" @bind-Value:after="ApplyAsync" Label="Тег" SearchFunc="SearchTags"
+                <MudAutocomplete T="string" @bind-Value="Tag" @bind-Value:after="ApplyAsync" Label="@Txt.S("Тег", "Tag")" SearchFunc="SearchTags"
                                  ToStringFunc="@(s => s is null ? "" : D.Tag(s) is { } t ? Segments.DisplayName(t) : s)"
                                  Clearable="true" MaxItems="30" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" />
             </MudItem>
             <MudItem xs="6" sm="3" md="1">
-                <MudSelect T="string" @bind-Value="Platform" @bind-Value:after="ApplyAsync" Label="Платформа" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                    <MudSelectItem T="string" Value="@Any">Любая</MudSelectItem>
+                <MudSelect T="string" @bind-Value="Platform" @bind-Value:after="ApplyAsync" Label="@Txt.S("Платформа", "Platform")" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    <MudSelectItem T="string" Value="@Any">@Txt.S("Любая", "Any")</MudSelectItem>
                     @foreach (var p in ItchCatalog.PlatformFilters)
                     {
-                        <MudSelectItem T="string" Value="@p.Slug">@p.Name</MudSelectItem>
+                        <MudSelectItem T="string" Value="@p.Slug">@CatalogNames.Platform(p.Slug, TextLang.Current)</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
             <MudItem xs="6" sm="3" md="1">
-                <MudSelect T="string" @bind-Value="Price" @bind-Value:after="ApplyAsync" Label="Цена" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                    <MudSelectItem T="string" Value="@Any">Любая</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("free")">Бесплатные</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("nyp")">Своя цена</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("paid")">Платные</MudSelectItem>
+                <MudSelect T="string" @bind-Value="Price" @bind-Value:after="ApplyAsync" Label="@Txt.S("Цена", "Price")" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    <MudSelectItem T="string" Value="@Any">@Txt.S("Любая", "Any")</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("free")">@Txt.S("Бесплатные", "Free")</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("nyp")">@Txt.S("Своя цена", "Name your price")</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("paid")">@Txt.S("Платные", "Paid")</MudSelectItem>
                 </MudSelect>
             </MudItem>
             <MudItem xs="6" sm="3" md="1">
-                <MudSelect T="string" @bind-Value="Year" @bind-Value:after="ApplyAsync" Label="Год" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                    <MudSelectItem T="string" Value="@Any">Любой</MudSelectItem>
+                <MudSelect T="string" @bind-Value="Year" @bind-Value:after="ApplyAsync" Label="@Txt.S("Год", "Year")" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    <MudSelectItem T="string" Value="@Any">@Txt.S("Любой", "Any")</MudSelectItem>
                     @for (var y = DateTime.UtcNow.Year; y >= ItchCatalog.FirstYear; y--)
                     {
                         var year = y.ToString();
@@ -57,18 +57,18 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="6" sm="3" md="2">
-                <MudSelect T="string" @bind-Value="Sort" @bind-Value:after="ApplyAsync" Label="Сортировка" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                    @foreach (var s in SortOptions)
+                <MudSelect T="string" @bind-Value="Sort" @bind-Value:after="ApplyAsync" Label="@Txt.S("Сортировка", "Sort")" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    @foreach (var s in SortKeys)
                     {
-                        <MudSelectItem T="string" Value="@s.Key">@s.Name</MudSelectItem>
+                        <MudSelectItem T="string" Value="@s">@SortName(s)</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
         </MudGrid>
     </MudPaper>
 
-    <GamesTable Games="_rows" Title="@($"{Fmt.N(_matched)} {Fmt.Plural(_matched, "игра", "игры", "игр")}")"
-                Subtitle="@(_matched > _rows.Count ? $"показаны первые {Fmt.N(_rows.Count)}" : null)"
+    <GamesTable Games="_rows" Title="@GameCountTitle(_matched)"
+                Subtitle="@(_matched > _rows.Count ? Txt.S($"показаны первые {Fmt.N(_rows.Count)}", $"showing the first {Fmt.N(_rows.Count)}") : null)"
                 ExportName="games" ShowHot="_hotAvailable" ShowDelta="@(Sort is "hot" or "delta")" BayesMinVotes="A.Params.BayesMinVotes" RowsPerPage="50" />
 </DataGate>
 
@@ -76,15 +76,22 @@
     private const string Any = "any";
     private const int MaxRows = 5000;
 
-    private static readonly (string Key, string Name)[] SortOptions =
-    [
-        ("ratings", "Больше оценок"),
-        ("wr", "Взвешенный рейтинг"),
-        ("hot", "Горячее"),
-        ("delta", "Прирост оценок"),
-        ("new", "Новые"),
-        ("comments", "Больше комментариев"),
-    ];
+    private static readonly string[] SortKeys = ["ratings", "wr", "hot", "delta", "new", "comments"];
+
+    private string SortName(string key) => key switch
+    {
+        "ratings" => Txt.S("Больше оценок", "Most ratings"),
+        "wr" => Txt.S("Взвешенный рейтинг", "Weighted rating"),
+        "hot" => Txt.S("Горячее", "Hot"),
+        "delta" => Txt.S("Прирост оценок", "Rating gain"),
+        "new" => Txt.S("Новые", "Newest"),
+        "comments" => Txt.S("Больше комментариев", "Most comments"),
+        _ => key,
+    };
+
+    private string GameCountTitle(int n) => Txt.Lang == UiLanguage.En
+        ? $"{Fmt.N(n)} {(n == 1 ? "game" : "games")}"
+        : $"{Fmt.N(n)} {Fmt.Plural(n, "игра", "игры", "игр")}";
 
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
     [SupplyParameterFromQuery(Name = "genre")] public string? Genre { get; set; }

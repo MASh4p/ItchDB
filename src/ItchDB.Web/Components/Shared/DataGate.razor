@@ -5,18 +5,18 @@
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="my-6">
         <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
-        <MudText Class="itch-muted">Загружаю данные в память…</MudText>
+        <MudText Class="itch-muted">@Txt.S("Загружаю данные в память…", "Loading data into memory…")</MudText>
     </MudStack>
 }
 else if (Snapshot.IsEmpty)
 {
     <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="my-4">
-        Данных пока нет. Откройте <MudLink Href="/data">«Сбор данных»</MudLink> и запустите «Быстрый старт» — первые выводы появятся через полчаса.
+        @Txt.S("Данных пока нет. Откройте", "No data yet. Open") <MudLink Href="/data">@Txt.S("«Сбор данных»", "Data collection")</MudLink> @Txt.S("и запустите «Быстрый старт» — первые выводы появятся через полчаса.", "and start “Quick start” — the first conclusions appear in about half an hour.")
     </MudAlert>
 }
 else if (Error is not null)
 {
-    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="my-4">Не удалось посчитать показатели: @Error</MudAlert>
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="my-4">@Txt.S($"Не удалось посчитать показатели: {Error}", $"Could not compute the figures: {Error}")</MudAlert>
 }
 else
 {

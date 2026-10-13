@@ -41,6 +41,7 @@ builder.Services.AddApexCharts(o =>
 
 builder.Services.AddItchInfrastructure(dataRoot);
 builder.Services.AddScoped<UiState>();
+builder.Services.AddScoped<UiText>();
 builder.Services.AddScoped<ExportService>();
 
 var app = builder.Build();

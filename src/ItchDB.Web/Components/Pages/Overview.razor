@@ -1,11 +1,12 @@
 @page "/"
 @inherits AnalyticsPage
 
-<PageTitle>Обзор — ItchDB</PageTitle>
+<PageTitle>@Txt.S("Обзор", "Overview") — ItchDB</PageTitle>
 
-<MudText Typo="Typo.h4">Обзор</MudText>
+<MudText Typo="Typo.h4">@Txt.S("Обзор", "Overview")</MudText>
 <MudText Class="itch-muted mb-4">
-    Состояние itch.io по собранным данным. Все цифры учитывают фильтры «18+», «0 оценок» и «Мин. оценок» в шапке.
+    @Txt.S("Состояние itch.io по собранным данным. Все цифры учитывают фильтры «18+», «0 оценок» и «Мин. оценок» в шапке.",
+        "itch.io as collected. Every figure follows the 18+, 0 ratings and minimum-ratings filters in the bar.")
 </MudText>
 
 <DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
@@ -14,53 +15,54 @@
         @if (D.YearsTotal > 0 && D.YearsComplete < D.YearsTotal)
         {
             <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mb-4">
-                Оценённые игры собраны полностью за @D.YearsComplete из @D.YearsTotal лет — медианы и доли пока смещены к популярным играм.
-                Запустите <MudLink Href="/data">глубокий сбор</MudLink>, он продолжит с места остановки.
+                @Txt.S($"Оценённые игры собраны полностью за {D.YearsComplete} из {D.YearsTotal} лет — медианы и доли пока смещены к популярным играм.",
+                    $"Rated games are fully collected for {D.YearsComplete} of {D.YearsTotal} years — medians and shares still lean toward popular games.")
+                @Txt.S("Запустите", "Start a") <MudLink Href="/data">@Txt.S("глубокий сбор", "deep collection")</MudLink>@Txt.S(", он продолжит с места остановки.", "; it continues from where it stopped.")
             </MudAlert>
         }
 
         <MudGrid Spacing="3" Class="mb-2">
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Игр на itch.io" Value="@Fmt.Short(D.CatalogTotal)" Large="true"
-                         Hint="@($"в базе {Fmt.N(vm.Known)}")"
-                         Tip="Счётчик «(N results)» списка всех игр itch.io; в базе — сколько из них уже собрано." />
+                    <Kpi Label="@Txt.S("Игр на itch.io", "Games on itch.io")" Value="@Fmt.Short(D.CatalogTotal)" Large="true"
+                         Hint="@Txt.S($"в базе {Fmt.N(vm.Known)}", $"in the database {Fmt.N(vm.Known)}")"
+                         Tip="@Txt.S("Счётчик «(N results)» списка всех игр itch.io; в базе — сколько из них уже собрано.", "The “(N results)” counter of the full itch.io game list; in the database is how many of them are collected.")" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Без единой оценки" Value="@Fmt.Pct(vm.ZeroShare)" Large="true" Color="#F5B84A"
-                         Hint="доля игр каталога"
-                         Formula="(игр на itch.io − игр с оценками) / игр на itch.io"
-                         Tip="Большинство игр никто не оценивает. Поэтому медианы считаются только по играм с оценками выше порога." />
+                    <Kpi Label="@Txt.S("Без единой оценки", "No ratings at all")" Value="@Fmt.Pct(vm.ZeroShare)" Large="true" Color="#F5B84A"
+                         Hint="@Txt.S("доля игр каталога", "share of the catalog")"
+                         Formula="@Txt.S("(игр на itch.io − игр с оценками) / игр на itch.io", "(games on itch.io − rated games) / games on itch.io")"
+                         Tip="@Txt.S("Большинство игр никто не оценивает. Поэтому медианы считаются только по играм с оценками выше порога.", "Most games are never rated. Medians therefore use only games above the ratings threshold.")" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="@(Ui.DemandUsesMean ? "Среднее оценок" : "Медиана оценок")" Value="@Fmt.N(Ui.DemandUsesMean ? vm.All.Mean : vm.All.Median, Ui.DemandUsesMean ? 1 : 0)" Large="true"
-                         Hint="@($"по {Fmt.N(vm.All.Qualified)} играм с ≥ {F.MinRatings}")"
+                    <Kpi Label="@(Ui.DemandUsesMean ? Txt.S("Среднее оценок", "Mean ratings") : Txt.S("Медиана оценок", "Median ratings"))" Value="@Fmt.N(Ui.DemandUsesMean ? vm.All.Mean : vm.All.Median, Ui.DemandUsesMean ? 1 : 0)" Large="true"
+                         Hint="@Txt.S($"по {Fmt.N(vm.All.Qualified)} играм с ≥ {F.MinRatings}", $"across {Fmt.N(vm.All.Qualified)} games with ≥ {F.MinRatings}")"
                          Formula="@(Ui.DemandUsesMean ? Formulas.Mean(F.MinRatings).Formula : Formulas.Median(F.MinRatings).Formula)"
                          Tip="@(Ui.DemandUsesMean ? Formulas.Mean(F.MinRatings).Text : Formulas.Median(F.MinRatings).Text)" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Лучшие 10%" Value="@($"{Fmt.N(vm.All.P90, 0)}+")" Large="true" Hint="оценок (P90)"
+                    <Kpi Label="@Txt.S("Лучшие 10%", "Top 10%")" Value="@($"{Fmt.N(vm.All.P90, 0)}+")" Large="true" Hint="@Txt.S("оценок (P90)", "ratings (P90)")"
                          Formula="@Formulas.Quantiles.Formula" Tip="@Formulas.Quantiles.Text" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="@($"Шанс {A.Params.SuccessThreshold}+ оценок")" Value="@Fmt.Pct(vm.All.SuccessShare, 1)" Large="true" Color="#4CC38A"
+                    <Kpi Label="@Txt.S($"Шанс {A.Params.SuccessThreshold}+ оценок", $"Chance of {A.Params.SuccessThreshold}+ ratings")" Value="@Fmt.Pct(vm.All.SuccessShare, 1)" Large="true" Color="#4CC38A"
                          Hint="@($"95%: {Fmt.Pct(vm.All.SuccessLow, 1)}–{Fmt.Pct(vm.All.SuccessHigh, 1)}")"
                          Formula="@Formulas.Success(A.Params.SuccessThreshold).Formula" Tip="@Formulas.Success(A.Params.SuccessThreshold).Text" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Средняя оценка" Value="@Fmt.Stars(vm.All.MedianStars)" Large="true"
-                         Hint="медиана среди игр с оценками"
-                         Tip="Звёзды почти не различают игры: у большинства заметных игр 4–5★. Спрос лучше видно по числу оценок." />
+                    <Kpi Label="@Txt.S("Средняя оценка", "Average rating")" Value="@Fmt.Stars(vm.All.MedianStars)" Large="true"
+                         Hint="@Txt.S("медиана среди игр с оценками", "median among rated games")"
+                         Tip="@Txt.S("Звёзды почти не различают игры: у большинства заметных игр 4–5★. Спрос лучше видно по числу оценок.", "Stars barely separate games: most visible ones sit at 4–5★. Demand shows up better in the rating count.")" />
                 </MudPaper>
             </MudItem>
         </MudGrid>
@@ -68,31 +70,32 @@
         <MudGrid Spacing="3">
             <MudItem xs="12" md="5">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <div class="itch-section-title">Главные выводы</div>
+                    <div class="itch-section-title">@Txt.S("Главные выводы", "Main conclusions")</div>
                     <InsightList Items="vm.Insights" Max="7" />
                     <MudButton Href="/developer" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward">
-                        Все выводы для разработчика
+                        @Txt.S("Все выводы для разработчика", "All conclusions for developers")
                     </MudButton>
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" md="7">
                 <MudPaper Class="pa-4 mb-3" Outlined="true">
                     <div class="itch-section-title">
-                        Сколько оценок набирают игры
-                        <FormulaTip Title="Распределение" Text="Столбец «0» — оценка по счётчику itch.io (все игры каталога минус игры с оценками), остальные — по собранным играм." />
+                        @Txt.S("Сколько оценок набирают игры", "How many ratings games collect")
+                        <FormulaTip Title="@Txt.S("Распределение", "Distribution")" Text="@Txt.S("Столбец «0» — оценка по счётчику itch.io (все игры каталога минус игры с оценками), остальные — по собранным играм.", "The “0” bar is estimated from the itch.io counter (every catalog game minus rated games); the rest use collected games.")" />
                     </div>
-                    <BarChart Items="vm.Distribution" Name="Игр" Height="260" Logarithmic="true" />
+                    <BarChart Items="vm.Distribution" Name="@Txt.S("Игр", "Games")" Height="260" Logarithmic="true" />
                 </MudPaper>
                 <MudPaper Class="pa-4" Outlined="true">
                     <div class="itch-section-title">
-                        По годам выхода
-                        <FormulaTip Title="Когорты по годам" Text="Линия — среднее число оценок у игр с порогом из шапки. Медиана года почти всегда 1 или 2 и не различает когорты. Старые игры успели накопить больше оценок, поэтому сравнивайте форму, а не уровни." />
+                        @Txt.S("По годам выхода", "By release year")
+                        <FormulaTip Title="@Txt.S("Когорты по годам", "Year cohorts")" Text="@Txt.S("Линия — среднее число оценок у игр с порогом из шапки. Медиана года почти всегда 1 или 2 и не различает когорты. Старые игры успели накопить больше оценок, поэтому сравнивайте форму, а не уровни.", "The line is the mean rating count for games at the bar’s threshold. A year’s median is almost always 1 or 2 and does not separate cohorts. Older games have had longer to collect ratings, so compare the shape, not the levels.")" />
                     </div>
-                    <SeriesChart Series="vm.Years" Height="280" LeftTitle="Игр" RightTitle="Среднее оценок" />
+                    <SeriesChart Series="vm.Years" Height="280" LeftTitle="@Txt.S("Игр", "Games")" RightTitle="@Txt.S("Среднее оценок", "Mean ratings")" />
                     @if (vm.WithYear < vm.Known * 0.8)
                     {
                         <MudText Typo="Typo.caption" Class="itch-muted">
-                            Год выхода известен у @Fmt.N(vm.WithYear) из @Fmt.N(vm.Known) игр в базе. Остальные годы появятся после глубокого сбора (списки по годам и страницы игр).
+                            @Txt.S($"Год выхода известен у {Fmt.N(vm.WithYear)} из {Fmt.N(vm.Known)} игр в базе. Остальные годы появятся после глубокого сбора (списки по годам и страницы игр).",
+                                $"Release year is known for {Fmt.N(vm.WithYear)} of {Fmt.N(vm.Known)} games in the database. The rest appear after a deep collection (year lists and game pages).")
                         </MudText>
                     }
                 </MudPaper>
@@ -103,47 +106,47 @@
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
                     <div class="itch-section-title">
-                        Жанры: спрос
+                        @Txt.S("Жанры: спрос", "Genres: demand")
                         <FormulaTip Title="@(Ui.DemandUsesMean ? Formulas.AdjMean.Title : Formulas.AdjMedian.Title)"
                                     Formula="@(Ui.DemandUsesMean ? Formulas.AdjMean.Formula : Formulas.AdjMedian.Formula)"
                                     Text="@(Ui.DemandUsesMean ? Formulas.AdjMean.Text : Formulas.AdjMedian.Text)" />
                     </div>
-                    <BarChart Items="vm.Genres" Name="@(Ui.DemandUsesMean ? "Сглаженное среднее" : "Сглаженная медиана")" Horizontal="true" Height="440" Decimals="1" Color="#5CC8FA" />
+                    <BarChart Items="vm.Genres" Name="@(Ui.DemandUsesMean ? Txt.S("Сглаженное среднее", "Smoothed mean") : Txt.S("Сглаженная медиана", "Smoothed median"))" Horizontal="true" Height="440" Decimals="1" Color="#5CC8FA" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4 mb-3" Outlined="true">
                     <div class="d-flex align-center">
-                        <div class="itch-section-title">Лучшие ниши сейчас</div>
+                        <div class="itch-section-title">@Txt.S("Лучшие ниши сейчас", "Best niches right now")</div>
                         <MudSpacer />
-                        <MudLink Href="/developer" Typo="Typo.caption">карта возможностей →</MudLink>
+                        <MudLink Href="/developer" Typo="Typo.caption">@Txt.S("карта возможностей →", "opportunity map →")</MudLink>
                     </div>
                     @foreach (var s in vm.Niches)
                     {
                         <div class="d-flex align-center py-1">
                             <MudLink Href="@($"/tags/{Uri.EscapeDataString(s.Key)}")" Style="min-width:0" Class="text-truncate">@s.Name</MudLink>
                             <MudSpacer />
-                            <span class="itch-muted mr-3" style="font-size:.8rem">@(Ui.DemandUsesMean ? "среднее" : "медиана") @Fmt.N(Ui.DemandUsesMean ? s.Mean : s.Median, Ui.DemandUsesMean ? 1 : 0) · игр @Fmt.Short(s.Denominator)</span>
-                            <QuadrantChip Value="s.Quadrant" />
+                            <span class="itch-muted mr-3" style="font-size:.8rem">@(Ui.DemandUsesMean ? Txt.S("среднее", "mean") : Txt.S("медиана", "median")) @Fmt.N(Ui.DemandUsesMean ? s.Mean : s.Median, Ui.DemandUsesMean ? 1 : 0) · @Txt.S("игр", "games") @Fmt.Short(s.Denominator)</span>
+                            <QuadrantChip @key="@($"{s.Key}:{Ui.Language}")" Value="s.Quadrant" />
                             <span class="itch-num ml-3" style="width:28px;text-align:right"><b>@Fmt.N(s.Opportunity, 0)</b></span>
                         </div>
                     }
                     @if (vm.Niches.Count == 0)
                     {
-                        <MudText Typo="Typo.body2" Class="itch-muted">Нужно больше тегов с оценёнными играми.</MudText>
+                        <MudText Typo="Typo.body2" Class="itch-muted">@Txt.S("Нужно больше тегов с оценёнными играми.", "Need more tags with rated games.")</MudText>
                     }
                 </MudPaper>
                 <MudPaper Class="pa-4" Outlined="true">
                     <div class="d-flex align-center">
-                        <div class="itch-section-title">@(vm.HotAvailable ? "Горячее сейчас" : "Самые оценённые")</div>
+                        <div class="itch-section-title">@(vm.HotAvailable ? Txt.S("Горячее сейчас", "Hot right now") : Txt.S("Самые оценённые", "Most rated"))</div>
                         <MudSpacer />
-                        <MudLink Href="/tops" Typo="Typo.caption">все топы →</MudLink>
+                        <MudLink Href="/tops" Typo="Typo.caption">@Txt.S("все топы →", "all tops →")</MudLink>
                     </div>
                     @foreach (var g in vm.TopGames)
                     {
                         <div class="d-flex align-center py-1 gap-3">
                             <div style="flex:1;min-width:0"><GameCell Game="g" /></div>
-                            <span class="itch-num">@Fmt.N(g.Ratings) оц.</span>
+                            <span class="itch-num">@Fmt.N(g.Ratings) @Txt.S("оц.", "rtg")</span>
                             @if (vm.HotAvailable && g.DeltaRatings is { } d)
                             {
                                 <span class="itch-num" style="color:#4CC38A">@Fmt.Signed(d)</span>
@@ -152,7 +155,7 @@
                     }
                     @if (!vm.HotAvailable)
                     {
-                        <MudText Typo="Typo.caption" Class="itch-muted">«Горячее» появится после второго дня сбора: нужны два снимка, чтобы увидеть прирост.</MudText>
+                        <MudText Typo="Typo.caption" Class="itch-muted">@Txt.S("«Горячее» появится после второго дня сбора: нужны два снимка, чтобы увидеть прирост.", "“Hot” appears after the second day of collection: two snapshots are needed to see the gain.")</MudText>
                     }
                 </MudPaper>
             </MudItem>

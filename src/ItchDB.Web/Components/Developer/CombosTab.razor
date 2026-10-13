@@ -1,19 +1,19 @@
 @* Pairs of tags that work better (or worse) together than each tag alone. *@
 
 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-3">
-    <b>Lift</b> — медиана оценок игр с обоими тегами, делённая на лучшую из медиан по отдельности.
-    Больше ×1 — сочетание работает лучше, чем каждый тег сам по себе; меньше — теги «спорят» за одну аудиторию.
+    @Txt.S("Lift — медиана оценок игр с обоими тегами, делённая на лучшую из медиан по отдельности. Больше ×1 — сочетание работает лучше, чем каждый тег сам по себе; меньше — теги «спорят» за одну аудиторию.",
+           "Lift is the median ratings of games with both tags, divided by the better of the two tags alone. Above ×1, the pair works better than either tag by itself; below, the tags compete for the same audience.")
 </MudAlert>
 
 <MudTable T="TagComboResult" Items="_rows" Filter="Matches" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="50"
-          SortLabel="Сортировка" Class="itch-table" Elevation="0">
+          SortLabel="@Txt.SortLabel" Class="itch-table" Elevation="0">
     <ToolBarContent>
-        <MudText Typo="Typo.h6">Сочетания тегов</MudText>
-        <MudText Typo="Typo.caption" Class="itch-muted ml-3">@Fmt.N(_rows.Count) пар</MudText>
+        <MudText Typo="Typo.h6">@Txt.S("Сочетания тегов", "Tag combinations")</MudText>
+        <MudText Typo="Typo.caption" Class="itch-muted ml-3">@Txt.S($"{Fmt.N(_rows.Count)} пар", $"{Fmt.N(_rows.Count)} pairs")</MudText>
         <MudSpacer />
-        <MudTextField T="string" @bind-Value="_search" Placeholder="Тег" Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+        <MudTextField T="string" @bind-Value="_search" Placeholder="@Txt.S("Тег", "Tag")" Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                       IconSize="Size.Small" Variant="Variant.Outlined" Margin="Margin.Dense" Class="itch-search mr-2" />
-        <MudSelect T="int" @bind-Value="_minGames" @bind-Value:after="Rebuild" Label="Игр в паре от" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Style="max-width:150px" Class="mr-2">
+        <MudSelect T="int" @bind-Value="_minGames" @bind-Value:after="Rebuild" Label="@Txt.S("Игр в паре от", "Games in the pair from")" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Style="max-width:180px" Class="mr-2">
             @foreach (var n in new[] { 15, 30, 50, 100, 250 })
             {
                 <MudSelectItem T="int" Value="n">@n</MudSelectItem>
@@ -22,37 +22,37 @@
         <ExportMenu T="TagComboResult" Name="tag-combos" Rows="@(() => _rows.Where(Matches))" Columns="ExportColumns" />
     </ToolBarContent>
     <HeaderContent>
-        <MudTh>Сочетание</MudTh>
-        <MudTh Style="text-align:right"><MudTableSortLabel T="TagComboResult" SortBy="c => c.Games">Игр</MudTableSortLabel></MudTh>
-        <MudTh Style="text-align:right"><MudTableSortLabel T="TagComboResult" SortBy="c => c.Qualified">С оценками ≥ @MinRatings</MudTableSortLabel></MudTh>
-        <MudTh Style="text-align:right"><MudTableSortLabel T="TagComboResult" SortBy="c => c.Median">Медиана пары</MudTableSortLabel></MudTh>
-        <MudTh Style="text-align:right">Медианы по отдельности</MudTh>
+        <MudTh>@Txt.S("Сочетание", "Combination")</MudTh>
+        <MudTh Style="text-align:right"><MudTableSortLabel T="TagComboResult" SortBy="c => c.Games">@Txt.S("Игр", "Games")</MudTableSortLabel></MudTh>
+        <MudTh Style="text-align:right"><MudTableSortLabel T="TagComboResult" SortBy="c => c.Qualified">@Txt.S($"С оценками ≥ {MinRatings}", $"With ≥ {MinRatings} ratings")</MudTableSortLabel></MudTh>
+        <MudTh Style="text-align:right"><MudTableSortLabel T="TagComboResult" SortBy="c => c.Median">@Txt.S("Медиана пары", "Pair median")</MudTableSortLabel></MudTh>
+        <MudTh Style="text-align:right">@Txt.S("Медианы по отдельности", "Medians alone")</MudTh>
         <MudTh Style="text-align:right">
             <MudTableSortLabel T="TagComboResult" SortBy="c => c.Lift" InitialDirection="SortDirection.Descending">Lift</MudTableSortLabel>
             <FormulaTip Title="@Formulas.Lift.Title" Formula="@Formulas.Lift.Formula" Text="@Formulas.Lift.Text" />
         </MudTh>
-        <MudTh Style="text-align:right"><MudTableSortLabel T="TagComboResult" SortBy="c => c.SuccessShare">Шанс ≥ @SuccessThreshold</MudTableSortLabel></MudTh>
+        <MudTh Style="text-align:right"><MudTableSortLabel T="TagComboResult" SortBy="c => c.SuccessShare">@Txt.S($"Шанс ≥ {SuccessThreshold}", $"Chance ≥ {SuccessThreshold}")</MudTableSortLabel></MudTh>
     </HeaderContent>
     <RowTemplate>
-        <MudTd DataLabel="Сочетание">
+        <MudTd DataLabel="@Txt.S("Сочетание", "Combination")">
             <MudLink Href="@($"/tags/{Uri.EscapeDataString(context.A.Slug)}")">@Segments.DisplayName(context.A)</MudLink>
             <span class="itch-muted"> + </span>
             <MudLink Href="@($"/tags/{Uri.EscapeDataString(context.B.Slug)}")">@Segments.DisplayName(context.B)</MudLink>
-            <MudIconButton Icon="@Icons.Material.Filled.Lightbulb" Size="Size.Small" title="Проверить идею с этими тегами"
+            <MudIconButton Icon="@Icons.Material.Filled.Lightbulb" Size="Size.Small" title="@Txt.S("Проверить идею с этими тегами", "Check an idea with these tags")"
                            Href="@($"/developer?tab=concept&tags={Uri.EscapeDataString(context.A.Slug)},{Uri.EscapeDataString(context.B.Slug)}")" />
         </MudTd>
-        <MudTd DataLabel="Игр" Class="itch-num" Style="text-align:right">@Fmt.N(context.Games)</MudTd>
-        <MudTd DataLabel="С оценками" Class="itch-num" Style="text-align:right">@Fmt.N(context.Qualified)</MudTd>
-        <MudTd DataLabel="Медиана пары" Class="itch-num" Style="text-align:right"><b>@Fmt.N(context.Median, 0)</b></MudTd>
-        <MudTd DataLabel="По отдельности" Class="itch-num itch-muted" Style="text-align:right">@Fmt.N(context.MedianA, 0) / @Fmt.N(context.MedianB, 0)</MudTd>
+        <MudTd DataLabel="@Txt.S("Игр", "Games")" Class="itch-num" Style="text-align:right">@Fmt.N(context.Games)</MudTd>
+        <MudTd DataLabel="@Txt.S("С оценками", "With ratings")" Class="itch-num" Style="text-align:right">@Fmt.N(context.Qualified)</MudTd>
+        <MudTd DataLabel="@Txt.S("Медиана пары", "Pair median")" Class="itch-num" Style="text-align:right"><b>@Fmt.N(context.Median, 0)</b></MudTd>
+        <MudTd DataLabel="@Txt.S("По отдельности", "Alone")" Class="itch-num itch-muted" Style="text-align:right">@Fmt.N(context.MedianA, 0) / @Fmt.N(context.MedianB, 0)</MudTd>
         <MudTd DataLabel="Lift" Class="itch-num" Style="@($"text-align:right;color:{LiftColor(context.Lift)}")">@Fmt.Times(context.Lift)</MudTd>
-        <MudTd DataLabel="Шанс" Class="itch-num" Style="text-align:right">@Fmt.Pct(context.SuccessShare, 1)</MudTd>
+        <MudTd DataLabel="@Txt.S("Шанс", "Chance")" Class="itch-num" Style="text-align:right">@Fmt.Pct(context.SuccessShare, 1)</MudTd>
     </RowTemplate>
     <PagerContent>
-        <MudTablePager RowsPerPageString="Строк:" InfoFormat="{first_item}–{last_item} из {all_items}" PageSizeOptions="new[] { 25, 50, 100, 500 }" />
+        <MudTablePager RowsPerPageString="@Txt.RowsLabel" InfoFormat="@Txt.PagerInfo" PageSizeOptions="new[] { 25, 50, 100, 500 }" />
     </PagerContent>
     <NoRecordsContent>
-        <MudText Class="itch-muted">Нет пар с достаточным числом игр. Уменьшите порог или соберите больше данных.</MudText>
+        <MudText Class="itch-muted">@Txt.S("Нет пар с достаточным числом игр. Уменьшите порог или соберите больше данных.", "No pairs have enough games. Lower the threshold or collect more data.")</MudText>
     </NoRecordsContent>
 </MudTable>
 
@@ -91,15 +91,15 @@
 
     private IReadOnlyList<ExportColumn<TagComboResult>> ExportColumns =>
     [
-        new("Тег A", c => Segments.DisplayName(c.A)),
-        new("Тег B", c => Segments.DisplayName(c.B)),
-        new("Игр", c => c.Games),
-        new($"С оценками ≥ {MinRatings}", c => c.Qualified),
-        new("Медиана пары", c => c.Median),
-        new("Медиана A", c => c.MedianA),
-        new("Медиана B", c => c.MedianB),
+        new(Txt.S("Тег A", "Tag A"), c => Segments.DisplayName(c.A)),
+        new(Txt.S("Тег B", "Tag B"), c => Segments.DisplayName(c.B)),
+        new(Txt.S("Игр", "Games"), c => c.Games),
+        new(Txt.S($"С оценками ≥ {MinRatings}", $"With ≥ {MinRatings} ratings"), c => c.Qualified),
+        new(Txt.S("Медиана пары", "Pair median"), c => c.Median),
+        new(Txt.S("Медиана A", "Median A"), c => c.MedianA),
+        new(Txt.S("Медиана B", "Median B"), c => c.MedianB),
         new("Lift", c => c.Lift),
-        new($"Успешных (≥ {SuccessThreshold})", c => c.Successes),
-        new("Шанс", c => c.SuccessShare),
+        new(Txt.S($"Успешных (≥ {SuccessThreshold})", $"Successes (≥ {SuccessThreshold})"), c => c.Successes),
+        new(Txt.S("Шанс", "Chance"), c => c.SuccessShare),
     ];
 }

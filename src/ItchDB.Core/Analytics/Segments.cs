@@ -43,24 +43,20 @@ public static class Segments
         Key = "all", Name = "Весь itch.io", Kind = SegmentKind.All, FilterKey = "", Predicate = _ => true,
     };
 
-    public static string KindName(SegmentKind kind) => kind switch
+    public static SegmentDef AllOf(UiLanguage? language = null) => new()
     {
-        SegmentKind.All => "Всё",
-        SegmentKind.Genre => "Жанр",
-        SegmentKind.Tag => "Тег",
-        SegmentKind.Engine => "Движок",
-        SegmentKind.Platform => "Платформа",
-        SegmentKind.Price => "Цена",
-        SegmentKind.Duration => "Длительность",
-        SegmentKind.Status => "Статус",
-        SegmentKind.Multiplayer => "Мультиплеер",
-        SegmentKind.Input => "Управление",
-        SegmentKind.Language => "Язык",
-        SegmentKind.Accessibility => "Доступность",
-        SegmentKind.Ai => "ИИ",
-        SegmentKind.Jam => "Джемы",
-        _ => kind.ToString(),
+        Key = "all",
+        Name = CatalogNames.Pick(Lang(language), "Весь itch.io", "All of itch.io"),
+        Kind = SegmentKind.All,
+        FilterKey = "",
+        Predicate = _ => true,
     };
+
+    public static string KindName(SegmentKind kind) => KindName(kind, null);
+
+    public static string KindName(SegmentKind kind, UiLanguage? language) => CatalogNames.SegmentKindName(kind, Lang(language));
+
+    private static UiLanguage Lang(UiLanguage? language) => language ?? TextLang.Current;
 
     public static SegmentKind FromTagKind(TagKind kind) => kind switch
     {
@@ -84,69 +80,96 @@ public static class Segments
         FilterKey = t.Slug,
     };
 
-    public static string DisplayName(TagRow t)
+    public static string DisplayName(TagRow t) => DisplayName(t, null);
+
+    public static string DisplayName(TagRow t, UiLanguage? language)
     {
-        if (ItchCatalog.GenreFromSlug(t.Slug) is { } g) return g.RussianName;
-        if (t.Kind == TagKind.Duration && ItchCatalog.Durations.FirstOrDefault(d => d.Slug == t.Slug) is { } d) return d.Name;
+        var lang = Lang(language);
+        if (ItchCatalog.GenreFromSlug(t.Slug) is { } g) return CatalogNames.Genre(g, lang);
+        if (t.Kind == TagKind.Duration) return CatalogNames.Duration(t.Slug, lang);
         return t.Name.Length > 0 ? t.Name : ItchCatalog.NameFromSlug(t.Slug);
     }
 
     /// <summary>The 18 itch.io genres (membership through genre filters and game pages).</summary>
-    public static List<SegmentDef> Genres(AnalyticsDataset d) =>
-        ItchCatalog.Genres.Select(g => d.Tag(g.Slug) is { } t
-            ? FromTag(t, g.RussianName, SegmentKind.Genre)
-            : new SegmentDef { Key = g.Slug, Name = g.RussianName, Kind = SegmentKind.Genre, FilterKey = g.Slug, Predicate = x => x.Genre == g.Slug })
-        .ToList();
+    public static List<SegmentDef> Genres(AnalyticsDataset d, UiLanguage? language = null)
+    {
+        var lang = Lang(language);
+        return ItchCatalog.Genres.Select(g =>
+        {
+            var name = CatalogNames.Genre(g, lang);
+            return d.Tag(g.Slug) is { } t
+                ? FromTag(t, name, SegmentKind.Genre)
+                : new SegmentDef { Key = g.Slug, Name = name, Kind = SegmentKind.Genre, FilterKey = g.Slug, Predicate = x => x.Genre == g.Slug };
+        }).ToList();
+    }
 
     /// <summary>Tags of a kind with at least <paramref name="minMembers"/> known games.</summary>
-    public static List<SegmentDef> OfKind(AnalyticsDataset d, TagKind kind, int minMembers, bool excludeGenres = true) =>
-        d.Tags.Values
+    public static List<SegmentDef> OfKind(AnalyticsDataset d, TagKind kind, int minMembers, bool excludeGenres = true, UiLanguage? language = null)
+    {
+        var lang = Lang(language);
+        return d.Tags.Values
             .Where(t => t.Kind == kind && d.Members(t.Id).Count >= minMembers && !(excludeGenres && ItchCatalog.IsGenreSlug(t.Slug)))
-            .Select(t => FromTag(t))
+            .Select(t => FromTag(t, DisplayName(t, lang)))
             .ToList();
+    }
 
-    public static List<SegmentDef> Platforms() =>
-        ItchCatalog.PlatformFilters.Select(p => new SegmentDef
+    public static List<SegmentDef> Platforms(UiLanguage? language = null)
+    {
+        var lang = Lang(language);
+        return ItchCatalog.PlatformFilters.Select(p => new SegmentDef
         {
-            Key = p.Slug, Name = p.Name, Kind = SegmentKind.Platform, FilterKey = p.Slug,
+            Key = p.Slug, Name = CatalogNames.Platform(p.Slug, lang), Kind = SegmentKind.Platform, FilterKey = p.Slug,
             Predicate = g => (g.Platforms & p.Flag) != 0,
         }).ToList();
+    }
 
-    public static List<SegmentDef> Prices() =>
-    [
-        new() { Key = "price-free", Name = "Бесплатные", Kind = SegmentKind.Price, FilterKey = "free", Predicate = g => g.Price == PriceModel.Free },
-        new() { Key = "price-nyp", Name = "Своя цена (от $0)", Kind = SegmentKind.Price, Predicate = g => g.Price == PriceModel.NameYourPrice },
-        new() { Key = "price-paid", Name = "Платные", Kind = SegmentKind.Price, FilterKey = "store", Predicate = g => g.Price == PriceModel.Paid },
-        new() { Key = "price-paid-5", Name = "Платные до $5", Kind = SegmentKind.Price, Predicate = g => g.Price == PriceModel.Paid && g.PriceCents <= 500 },
-        new() { Key = "price-paid-15", Name = "Платные $5–15", Kind = SegmentKind.Price, Predicate = g => g.Price == PriceModel.Paid && g.PriceCents is > 500 and <= 1500 },
-        new() { Key = "price-paid-more", Name = "Платные дороже $15", Kind = SegmentKind.Price, Predicate = g => g.Price == PriceModel.Paid && g.PriceCents > 1500 },
-    ];
+    public static List<SegmentDef> Prices(UiLanguage? language = null)
+    {
+        var lang = Lang(language);
+        return
+        [
+            new() { Key = "price-free", Name = CatalogNames.PriceKey("price-free", lang), Kind = SegmentKind.Price, FilterKey = "free", Predicate = g => g.Price == PriceModel.Free },
+            new() { Key = "price-nyp", Name = CatalogNames.PriceKey("price-nyp", lang), Kind = SegmentKind.Price, Predicate = g => g.Price == PriceModel.NameYourPrice },
+            new() { Key = "price-paid", Name = CatalogNames.PriceKey("price-paid", lang), Kind = SegmentKind.Price, FilterKey = "store", Predicate = g => g.Price == PriceModel.Paid },
+            new() { Key = "price-paid-5", Name = CatalogNames.PriceKey("price-paid-5", lang), Kind = SegmentKind.Price, Predicate = g => g.Price == PriceModel.Paid && g.PriceCents <= 500 },
+            new() { Key = "price-paid-15", Name = CatalogNames.PriceKey("price-paid-15", lang), Kind = SegmentKind.Price, Predicate = g => g.Price == PriceModel.Paid && g.PriceCents is > 500 and <= 1500 },
+            new() { Key = "price-paid-more", Name = CatalogNames.PriceKey("price-paid-more", lang), Kind = SegmentKind.Price, Predicate = g => g.Price == PriceModel.Paid && g.PriceCents > 1500 },
+        ];
+    }
 
-    public static List<SegmentDef> Statuses() =>
-        ItchCatalog.Statuses.Select(s => new SegmentDef
+    public static List<SegmentDef> Statuses(UiLanguage? language = null)
+    {
+        var lang = Lang(language);
+        return ItchCatalog.Statuses.Select(s => new SegmentDef
         {
-            Key = "status-" + s.Status.ToString().ToLowerInvariant(), Name = s.Name, Kind = SegmentKind.Status,
+            Key = "status-" + s.Status.ToString().ToLowerInvariant(), Name = CatalogNames.Status(s.Status, lang), Kind = SegmentKind.Status,
             Predicate = g => g.Status == s.Status,
         }).ToList();
+    }
 
-    public static List<SegmentDef> AiUsages() =>
-    [
-        new() { Key = "ai-none", Name = "Без генеративного ИИ", Kind = SegmentKind.Ai, Predicate = g => g.Ai == AiUsage.NoAi },
-        new() { Key = "ai-used", Name = "С генеративным ИИ", Kind = SegmentKind.Ai, Predicate = g => g.Ai == AiUsage.UsesAi },
-        new() { Key = "jam-entry", Name = "Сделаны на джем", Kind = SegmentKind.Jam, Predicate = g => g.IsJamEntry },
-    ];
+    public static List<SegmentDef> AiUsages(UiLanguage? language = null)
+    {
+        var lang = Lang(language);
+        return
+        [
+            new() { Key = "ai-none", Name = CatalogNames.PriceKey("ai-none", lang), Kind = SegmentKind.Ai, Predicate = g => g.Ai == AiUsage.NoAi },
+            new() { Key = "ai-used", Name = CatalogNames.PriceKey("ai-used", lang), Kind = SegmentKind.Ai, Predicate = g => g.Ai == AiUsage.UsesAi },
+            new() { Key = "jam-entry", Name = CatalogNames.PriceKey("jam-entry", lang), Kind = SegmentKind.Jam, Predicate = g => g.IsJamEntry },
+        ];
+    }
 
     /// <summary>Everything the formats table on the developer page compares.</summary>
-    public static List<SegmentDef> Formats(AnalyticsDataset d, int minMembers)
+    public static List<SegmentDef> Formats(AnalyticsDataset d, int minMembers, UiLanguage? language = null)
     {
+        var lang = Lang(language);
         var list = new List<SegmentDef>();
-        list.AddRange(Platforms());
-        list.AddRange(Prices());
-        list.AddRange(OfKind(d, TagKind.Duration, minMembers));
-        list.AddRange(OfKind(d, TagKind.Multiplayer, minMembers));
-        list.AddRange(OfKind(d, TagKind.Input, minMembers));
-        list.AddRange(Statuses());
-        list.AddRange(AiUsages());
+        list.AddRange(Platforms(lang));
+        list.AddRange(Prices(lang));
+        list.AddRange(OfKind(d, TagKind.Duration, minMembers, language: lang));
+        list.AddRange(OfKind(d, TagKind.Multiplayer, minMembers, language: lang));
+        list.AddRange(OfKind(d, TagKind.Input, minMembers, language: lang));
+        list.AddRange(Statuses(lang));
+        list.AddRange(AiUsages(lang));
         return list;
     }
 

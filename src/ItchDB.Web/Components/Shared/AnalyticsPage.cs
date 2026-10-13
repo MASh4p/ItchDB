@@ -1,3 +1,4 @@
+using ItchDB.Core;
 using ItchDB.Core.Analytics;
 using ItchDB.Infrastructure.Analytics;
 using ItchDB.Web.Services;
@@ -37,6 +38,7 @@ public abstract class AnalyticsPage : ComponentBase, IDisposable
     {
         Computing = true;
         ComputeError = null;
+        TextLang.Set(Ui.Language);
         try
         {
             var snapshot = A;

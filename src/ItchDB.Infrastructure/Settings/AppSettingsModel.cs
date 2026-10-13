@@ -29,6 +29,9 @@ public sealed class AppSettingsModel
     /// <summary>The segment table and the opportunity map show the arithmetic mean instead of the median.</summary>
     public bool DemandUsesMean { get; set; }
 
+    /// <summary>"ru" or "en". The local app starts in Russian.</summary>
+    public string Language { get; set; } = "ru";
+
     // Analytics
     public int SuccessThreshold { get; set; } = 10;
     public double ShrinkK { get; set; } = 20;

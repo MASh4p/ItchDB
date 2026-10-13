@@ -1,6 +1,7 @@
 @* Quadrant of the opportunity map with its meaning in a tooltip. *@
-<MudTooltip Text="@SegmentAnalyzer.QuadrantHint(Value)" Arrow="true">
-    <span class="itch-quadrant @Css">@SegmentAnalyzer.QuadrantName(Value)</span>
+@inject UiState Ui
+<MudTooltip @key="Ui.Language" Text="@SegmentAnalyzer.QuadrantHint(Value, Ui.Language)" Arrow="true">
+    <span class="itch-quadrant @Css">@SegmentAnalyzer.QuadrantName(Value, Ui.Language)</span>
 </MudTooltip>
 
 @code {

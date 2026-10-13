@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using ItchDB.Core;
 using ItchDB.Core.Analytics;
 using ItchDB.Core.Domain;
 using ItchDB.Infrastructure.Crawling;
@@ -52,6 +53,17 @@ public sealed class AnalyticsService : IDisposable
 
     public Task EnsureLoadedAsync() => IsLoaded ? Task.CompletedTask : RefreshAsync();
 
+    /// <summary>Rebuilds reports in another language without reloading the database.</summary>
+    public void UseLanguage(UiLanguage language)
+    {
+        TextLang.SetApp(language);
+        TextLang.Set(language);
+        if (_current.Language == language && IsLoaded) return;
+        if (!IsLoaded || _current.Data.IsEmpty && _current.Language == language) return;
+        _current = new AnalyticsSnapshot(_current.Data, _current.Params, DateTime.UtcNow, language);
+        Updated?.Invoke();
+    }
+
     /// <summary>Reloads the dataset; concurrent calls share one load.</summary>
     public Task RefreshAsync(bool writeSegmentHistory = false)
     {
@@ -72,7 +84,9 @@ public sealed class AnalyticsService : IDisposable
         {
             var p = _settings.Current.ToAnalyticsParams();
             var data = await _loader.LoadAsync(p);
-            var snapshot = new AnalyticsSnapshot(data, p, DateTime.UtcNow);
+            // Read after the load: a language switch during the query must not publish the old snapshot.
+            var lang = TextLang.App;
+            var snapshot = new AnalyticsSnapshot(data, p, DateTime.UtcNow, lang);
             _current = snapshot;
             IsLoaded = true;
             LastError = null;

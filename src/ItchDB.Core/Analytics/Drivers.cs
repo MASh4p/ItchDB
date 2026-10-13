@@ -55,12 +55,12 @@ public static class Drivers
 {
     public const int MinGroupSize = 20;
 
-    public static DriversReport Analyze(AnalyticsDataset d, AnalyticsFilter f, AnalyticsParams p, DateTime now, int topTags = 40)
+    public static DriversReport Analyze(AnalyticsDataset d, AnalyticsFilter f, AnalyticsParams p, DateTime now, int topTags = 40, UiLanguage language = UiLanguage.Ru)
     {
         var sample = d.Games.Where(g => f.Includes(g) && g.HasDetails && g.RatingsKnown).ToList();
         if (sample.Count < 2 * MinGroupSize) return new DriversReport { Sample = sample.Count };
 
-        var features = BuildFeatures(d, sample, topTags);
+        var features = BuildFeatures(d, sample, topTags, language);
         var results = new List<DriverResult>();
         foreach (var feat in features)
         {
@@ -89,7 +89,7 @@ public static class Drivers
         return new DriversReport
         {
             Results = results,
-            Correlations = Correlate(sample, now),
+            Correlations = Correlate(sample, now, language),
             Sample = sample.Count,
             ModelFeatures = used,
             RSquared = r2,
@@ -98,30 +98,31 @@ public static class Drivers
         };
     }
 
-    public static List<DriverFeature> BuildFeatures(AnalyticsDataset d, IReadOnlyList<GameRow> sample, int topTags)
+    public static List<DriverFeature> BuildFeatures(AnalyticsDataset d, IReadOnlyList<GameRow> sample, int topTags, UiLanguage language = UiLanguage.Ru)
     {
+        string G(string ru, string en) => CatalogNames.Pick(language, ru, en);
         var list = new List<DriverFeature>
         {
-            new("platform-web", "Играется в браузере", "Платформа", g => (g.Platforms & Platforms.Web) != 0),
-            new("platform-windows", "Windows", "Платформа", g => (g.Platforms & Platforms.Windows) != 0),
-            new("platform-osx", "macOS", "Платформа", g => (g.Platforms & Platforms.MacOS) != 0),
-            new("platform-linux", "Linux", "Платформа", g => (g.Platforms & Platforms.Linux) != 0),
-            new("platform-android", "Android", "Платформа", g => (g.Platforms & Platforms.Android) != 0),
-            new("price-paid", "Платная", "Цена", g => g.Price == PriceModel.Paid),
-            new("price-nyp", "Своя цена", "Цена", g => g.Price == PriceModel.NameYourPrice),
-            new("status-released", "Статус «выпущена»", "Статус", g => g.Status == GameStatus.Released),
-            new("status-dev", "Статус «в разработке»", "Статус", g => g.Status == GameStatus.InDevelopment),
-            new("ai-none", "Заявлено «без генеративного ИИ»", "ИИ", g => g.Ai == AiUsage.NoAi),
-            new("ai-used", "Использует генеративный ИИ", "ИИ", g => g.Ai == AiUsage.UsesAi),
-            new("jam", "Сделана на джем", "Прочее", g => g.IsJamEntry),
-            new("sale", "Сейчас со скидкой", "Цена", g => g.SalePercent > 0),
-            new("featured", "Была в featured", "Витрина", g => g.IsFeatured),
+            new("platform-web", G("Играется в браузере", "Plays in the browser"), G("Платформа", "Platform"), g => (g.Platforms & Platforms.Web) != 0),
+            new("platform-windows", "Windows", G("Платформа", "Platform"), g => (g.Platforms & Platforms.Windows) != 0),
+            new("platform-osx", "macOS", G("Платформа", "Platform"), g => (g.Platforms & Platforms.MacOS) != 0),
+            new("platform-linux", "Linux", G("Платформа", "Platform"), g => (g.Platforms & Platforms.Linux) != 0),
+            new("platform-android", "Android", G("Платформа", "Platform"), g => (g.Platforms & Platforms.Android) != 0),
+            new("price-paid", G("Платная", "Paid"), G("Цена", "Price"), g => g.Price == PriceModel.Paid),
+            new("price-nyp", G("Своя цена", "Name your price"), G("Цена", "Price"), g => g.Price == PriceModel.NameYourPrice),
+            new("status-released", G("Статус «выпущена»", "Status “released”"), G("Статус", "Status"), g => g.Status == GameStatus.Released),
+            new("status-dev", G("Статус «в разработке»", "Status “in development”"), G("Статус", "Status"), g => g.Status == GameStatus.InDevelopment),
+            new("ai-none", G("Заявлено «без генеративного ИИ»", "Declared “no generative AI”"), G("ИИ", "AI"), g => g.Ai == AiUsage.NoAi),
+            new("ai-used", G("Использует генеративный ИИ", "Uses generative AI"), G("ИИ", "AI"), g => g.Ai == AiUsage.UsesAi),
+            new("jam", G("Сделана на джем", "Made in a jam"), G("Прочее", "Other"), g => g.IsJamEntry),
+            new("sale", G("Сейчас со скидкой", "On sale"), G("Цена", "Price"), g => g.SalePercent > 0),
+            new("featured", G("Была в featured", "Was featured"), G("Витрина", "Storefront"), g => g.IsFeatured),
         };
 
         foreach (var genre in ItchCatalog.Genres.Where(x => x.Slug != "genre-other"))
         {
             var slug = genre.Slug;
-            list.Add(new DriverFeature("genre:" + slug, genre.RussianName, "Основной жанр", g => g.Genre == slug));
+            list.Add(new DriverFeature("genre:" + slug, CatalogNames.Genre(genre, language), G("Основной жанр", "Main genre"), g => g.Genre == slug));
         }
 
         var counts = new Dictionary<int, int>();
@@ -138,16 +139,16 @@ public static class Drivers
             foreach (var t in TopOf(kind, n))
             {
                 var id = t.Id;
-                list.Add(new DriverFeature(t.Slug, Segments.DisplayName(t), group, g => g.HasTag(id)));
+                list.Add(new DriverFeature(t.Slug, Segments.DisplayName(t, language), group, g => g.HasTag(id)));
             }
         }
 
-        AddTags(TagKind.Tag, topTags, "Тег");
-        AddTags(TagKind.Engine, 10, "Движок");
-        AddTags(TagKind.Duration, 6, "Длительность");
-        AddTags(TagKind.Multiplayer, 5, "Мультиплеер");
-        AddTags(TagKind.Input, 6, "Управление");
-        AddTags(TagKind.Accessibility, 4, "Доступность");
+        AddTags(TagKind.Tag, topTags, G("Тег", "Tag"));
+        AddTags(TagKind.Engine, 10, G("Движок", "Engine"));
+        AddTags(TagKind.Duration, 6, G("Длительность", "Length"));
+        AddTags(TagKind.Multiplayer, 5, G("Мультиплеер", "Multiplayer"));
+        AddTags(TagKind.Input, 6, G("Управление", "Input"));
+        AddTags(TagKind.Accessibility, 4, G("Доступность", "Accessibility"));
         return list;
     }
 
@@ -201,8 +202,9 @@ public static class Drivers
         }
     }
 
-    private static List<CorrelationResult> Correlate(IReadOnlyList<GameRow> sample, DateTime now)
+    private static List<CorrelationResult> Correlate(IReadOnlyList<GameRow> sample, DateTime now, UiLanguage language)
     {
+        string G(string ru, string en) => CatalogNames.Pick(language, ru, en);
         var result = new List<CorrelationResult>();
         void Add(string name, IEnumerable<GameRow> games, Func<GameRow, double> value, string note)
         {
@@ -212,12 +214,12 @@ public static class Drivers
             if (!double.IsNaN(rho)) result.Add(new CorrelationResult(name, rho, list.Count, note));
         }
 
-        Add("Возраст игры", sample, g => g.AgeDays(now), "Старые игры успели накопить оценки");
-        Add("Число скриншотов", sample, g => g.Screenshots, "Оформление страницы");
-        Add("Число тегов", sample, g => g.TagIds.Length, "Сколько тегов и фильтров указано");
-        Add("Длина короткого описания", sample.Where(g => g.ShortText is not null), g => g.ShortText!.Length, "Подзаголовок в карточке");
-        Add("Цена (платные)", sample.Where(g => g.Price == PriceModel.Paid && g.PriceCents > 0), g => g.PriceCents!.Value, "Только платные игры");
-        Add("Комментарии", sample.Where(g => g.Comments is not null), g => g.Comments!.Value, "Обсуждаемость почти всегда растёт вместе с оценками");
+        Add(G("Возраст игры", "Game age"), sample, g => g.AgeDays(now), G("Старые игры успели накопить оценки", "Older games have had time to collect ratings"));
+        Add(G("Число скриншотов", "Screenshot count"), sample, g => g.Screenshots, G("Оформление страницы", "Page presentation"));
+        Add(G("Число тегов", "Tag count"), sample, g => g.TagIds.Length, G("Сколько тегов и фильтров указано", "How many tags and filters are set"));
+        Add(G("Длина короткого описания", "Short description length"), sample.Where(g => g.ShortText is not null), g => g.ShortText!.Length, G("Подзаголовок в карточке", "Card subtitle"));
+        Add(G("Цена (платные)", "Price (paid)"), sample.Where(g => g.Price == PriceModel.Paid && g.PriceCents > 0), g => g.PriceCents!.Value, G("Только платные игры", "Paid games only"));
+        Add(G("Комментарии", "Comments"), sample.Where(g => g.Comments is not null), g => g.Comments!.Value, G("Обсуждаемость почти всегда растёт вместе с оценками", "Discussion almost always grows together with ratings"));
         return result.OrderByDescending(r => Math.Abs(r.Rho)).ToList();
     }
 }

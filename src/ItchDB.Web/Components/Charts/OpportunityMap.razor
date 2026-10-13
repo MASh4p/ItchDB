@@ -3,11 +3,11 @@
 
 @if (_points.Count == 0)
 {
-    <MudText Typo="Typo.body2" Class="itch-muted pa-4">Недостаточно сегментов с данными для карты.</MudText>
+    <MudText Typo="Typo.body2" Class="itch-muted pa-4">@Txt.S("Недостаточно сегментов с данными для карты.", "Not enough segments with data for the map.")</MudText>
 }
 else
 {
-    <svg viewBox="0 0 @W @H" class="itch-map" role="img" aria-label="Карта возможностей">
+    <svg viewBox="0 0 @W @H" class="itch-map" role="img" aria-label="@Txt.S("Карта возможностей", "Opportunity map")">
         <rect x="@L" y="@T" width="@(W - L - R)" height="@(H - T - B)" fill="rgba(255,255,255,0.015)" />
         <rect x="@L" y="@T" width="@F(_splitX - L)" height="@F(_splitY - T)" fill="rgba(92,200,250,0.05)" />
         <rect x="@F(_splitX)" y="@F(_splitY)" width="@F(W - R - _splitX)" height="@F(H - B - _splitY)" fill="rgba(245,184,74,0.04)" />
@@ -30,10 +30,10 @@ else
         <line x1="@F(_splitX)" x2="@F(_splitX)" y1="@T" y2="@(H - B)" stroke="rgba(255,255,255,0.28)" stroke-dasharray="5 5" />
         <line x1="@L" x2="@(W - R)" y1="@F(_splitY)" y2="@F(_splitY)" stroke="rgba(255,255,255,0.28)" stroke-dasharray="5 5" />
 
-        <text x="@(L + 10)" y="@(T + 18)" class="itch-map-quadrant" fill="#5CC8FA">Голубой океан</text>
-        <text x="@(W - R - 10)" y="@(T + 18)" text-anchor="end" class="itch-map-quadrant" fill="#FF6B6B">Красный океан</text>
-        <text x="@(L + 10)" y="@(H - B - 10)" class="itch-map-quadrant" fill="#4CC38A">Тихая ниша</text>
-        <text x="@(W - R - 10)" y="@(H - B - 10)" text-anchor="end" class="itch-map-quadrant" fill="#F5B84A">Ловушка</text>
+        <text x="@(L + 10)" y="@(T + 18)" class="itch-map-quadrant" fill="#5CC8FA">@SegmentAnalyzer.QuadrantName(Quadrant.BlueOcean)</text>
+        <text x="@(W - R - 10)" y="@(T + 18)" text-anchor="end" class="itch-map-quadrant" fill="#FF6B6B">@SegmentAnalyzer.QuadrantName(Quadrant.RedOcean)</text>
+        <text x="@(L + 10)" y="@(H - B - 10)" class="itch-map-quadrant" fill="#4CC38A">@SegmentAnalyzer.QuadrantName(Quadrant.QuietNiche)</text>
+        <text x="@(W - R - 10)" y="@(H - B - 10)" text-anchor="end" class="itch-map-quadrant" fill="#F5B84A">@SegmentAnalyzer.QuadrantName(Quadrant.Trap)</text>
 
         @foreach (var p in _points)
         {
@@ -45,19 +45,20 @@ else
             </g>
         }
 
-        <text x="@((L + W - R) / 2)" y="@(H - 6)" text-anchor="middle" class="itch-map-axis">Конкуренция: игр в сегменте на itch.io (лог. шкала) →</text>
-        <text x="14" y="@((T + H - B) / 2)" text-anchor="middle" class="itch-map-axis" transform="rotate(-90 14 @((T + H - B) / 2))">@(UseMean ? "Спрос: среднее число оценок →" : "Спрос: типичные оценки →")</text>
+        <text x="@((L + W - R) / 2)" y="@(H - 6)" text-anchor="middle" class="itch-map-axis">@Txt.S("Конкуренция: игр в сегменте на itch.io (лог. шкала) →", "Competition: games in the segment on itch.io (log scale) →")</text>
+        <text x="14" y="@((T + H - B) / 2)" text-anchor="middle" class="itch-map-axis" transform="rotate(-90 14 @((T + H - B) / 2))">@(UseMean ? Txt.S("Спрос: среднее число оценок →", "Demand: mean rating count →") : Txt.S("Спрос: типичные оценки →", "Demand: typical ratings →"))</text>
     </svg>
     <MudText Typo="Typo.caption" Class="itch-muted">
         @if (UseMean)
         {
-            <text>Высота — среднее число оценок игр с ≥ @MinRatings оценками, сглаженное к itch.io.</text>
+            <text>@Txt.S($"Высота — среднее число оценок игр с ≥ {MinRatings} оценками, сглаженное к itch.io.", $"Height is the mean rating count of games with ≥ {MinRatings} ratings, smoothed toward itch.io.")</text>
         }
         else
         {
-            <text>Высота — типичное число оценок: геометрическое среднее игр с ≥ @MinRatings оценками, сглаженное к itch.io. Медиана часто равна 1–2 и слипает теги в полосы; переключатель «Среднее» разводит их.</text>
+            <text>@Txt.S($"Высота — типичное число оценок: геометрическое среднее игр с ≥ {MinRatings} оценками, сглаженное к itch.io. Медиана часто равна 1–2 и слипает теги в полосы; переключатель «Среднее» разводит их.", $"Height is the typical rating count: the geometric mean of games with ≥ {MinRatings} ratings, smoothed toward itch.io. The median is often 1–2 and piles tags into bands; the “Mean” switch separates them.")</text>
         }
-        Скрыты сегменты, у которых игр с оценками меньше @MinGames. Пунктир — медианы среди показанных сегментов. Размер точки — шанс набрать @Threshold+ оценок. Клик по точке открывает страницу сегмента.
+        @Txt.S($" Скрыты сегменты, у которых игр с оценками меньше {MinGames}. Пунктир — медианы среди показанных сегментов. Размер точки — шанс набрать {Threshold}+ оценок. Клик по точке открывает страницу сегмента.",
+            $" Segments with fewer than {MinGames} rated games are hidden. The dashed lines are the medians of the segments shown. Point size is the chance of {Threshold}+ ratings. A click opens the segment page.")
     </MudText>
 }
 
@@ -169,11 +170,16 @@ else
         return Stats.Median(sorted);
     }
 
-    private string Tooltip(SegmentStats s) =>
-        $"{s.Name} — {SegmentAnalyzer.QuadrantName(s.Quadrant)}\n" +
-        $"{(s.IncludesUnrated ? "Игр на itch.io" : "Игр с оценками")}: {(s.DenominatorEstimated ? "≈" : "")}{Fmt.N(s.Denominator)}\n" +
-        $"Оценки (≥ {MinRatings}): среднее {Fmt.N(s.Mean, 1)} · медиана {Fmt.N(s.Median, 0)} · типичные {Fmt.N(s.Typical, 1)}\n" +
-        $"Шанс {Threshold}+ оценок: {Fmt.Pct(s.SuccessShare, 1)}\n" +
-        $"Тренд: {(s.Trend is { } t ? Fmt.Signed(t * 100, 0, "%") : "—")}\n" +
-        $"Opportunity: {Fmt.N(s.Opportunity, 0)}";
+    private string Tooltip(SegmentStats s)
+    {
+        var games = s.IncludesUnrated ? Txt.S("Игр на itch.io", "Games on itch.io") : Txt.S("Игр с оценками", "Rated games");
+        var ratings = Txt.S(
+            $"Оценки (≥ {MinRatings}): среднее {Fmt.N(s.Mean, 1)} · медиана {Fmt.N(s.Median, 0)} · типичные {Fmt.N(s.Typical, 1)}",
+            $"Ratings (≥ {MinRatings}): mean {Fmt.N(s.Mean, 1)} · median {Fmt.N(s.Median, 0)} · typical {Fmt.N(s.Typical, 1)}");
+        var chance = Txt.S($"Шанс {Threshold}+ оценок: {Fmt.Pct(s.SuccessShare, 1)}", $"Chance of {Threshold}+ ratings: {Fmt.Pct(s.SuccessShare, 1)}");
+        var trend = s.Trend is { } t ? Fmt.Signed(t * 100, 0, "%") : "—";
+        return $"{s.Name} — {SegmentAnalyzer.QuadrantName(s.Quadrant)}\n" +
+            $"{games}: {(s.DenominatorEstimated ? "≈" : "")}{Fmt.N(s.Denominator)}\n" +
+            $"{ratings}\n{chance}\n{Txt.S("Тренд", "Trend")}: {trend}\nOpportunity: {Fmt.N(s.Opportunity, 0)}";
+    }
 }

@@ -3,17 +3,17 @@
 
 @if (ShowHideSwitch)
 {
-    <MudSwitch T="bool" Value="HideSmall" ValueChanged="HideSmallChanged" Color="Color.Primary" Label="Скрыть малые" Class="mr-1" />
+    <MudSwitch T="bool" Value="HideSmall" ValueChanged="HideSmallChanged" Color="Color.Primary" Label="@Txt.S("Скрыть малые", "Hide small")" Class="mr-1" />
 }
 <MudNumericField T="int" Value="Ui.SmallGameThreshold" ValueChanged="OnThreshold" Min="1" Max="100000" HideSpinButtons="true"
-                 Variant="Variant.Outlined" Margin="Margin.Dense" Label="Порог, игр" Class="itch-threshold mr-1" />
-<MudTooltip Text="Тег считается малым, если игр с оценками меньше порога. Тот же порог убирает точки с карты возможностей." Arrow="true">
+                 Variant="Variant.Outlined" Margin="Margin.Dense" Label="@Txt.S("Порог, игр", "Threshold, games")" Class="itch-threshold mr-1" />
+<MudTooltip Text="@Txt.S("Тег считается малым, если игр с оценками меньше порога. Тот же порог убирает точки с карты возможностей.", "A tag is small when rated games are below the threshold. The same threshold drops points from the opportunity map.")" Arrow="true">
     <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" Class="itch-tip-icon mr-2" />
 </MudTooltip>
 <MudChipSet T="string" @bind-SelectedValue="_demand" @bind-SelectedValue:after="CommitDemand" SelectionMode="SelectionMode.SingleSelection"
             CheckMark="false" Size="Size.Small" SelectedColor="Color.Primary" Variant="Variant.Outlined" Class="mr-2">
-    <MudChip T="string" Value="@("median")" Text="Медиана" />
-    <MudChip T="string" Value="@("mean")" Text="Среднее" />
+    <MudChip T="string" Value="@("median")" Text="@Txt.S("Медиана", "Median")" />
+    <MudChip T="string" Value="@("mean")" Text="@Txt.S("Среднее", "Mean")" />
 </MudChipSet>
 
 @code {

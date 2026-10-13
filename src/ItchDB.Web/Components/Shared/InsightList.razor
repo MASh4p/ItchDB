@@ -2,7 +2,7 @@
 
 @if (Items.Count == 0)
 {
-    <MudText Typo="Typo.body2" Class="itch-muted">@Empty</MudText>
+    <MudText Typo="Typo.body2" Class="itch-muted">@EmptyText</MudText>
 }
 @foreach (var i in Items.Take(Max))
 {
@@ -11,7 +11,7 @@
         <MudText Typo="Typo.body2" Class="itch-muted">@i.Text</MudText>
         @if (ShowLinks && i.Link is not null)
         {
-            <MudLink Href="@i.Link" Typo="Typo.caption">подробнее →</MudLink>
+            <MudLink Href="@i.Link" Typo="Typo.caption">@Txt.S("подробнее →", "details →")</MudLink>
         }
     </div>
 }
@@ -20,7 +20,9 @@
     [Parameter, EditorRequired] public IReadOnlyList<Insight> Items { get; set; } = [];
     [Parameter] public int Max { get; set; } = int.MaxValue;
     [Parameter] public bool ShowLinks { get; set; } = true;
-    [Parameter] public string Empty { get; set; } = "Выводов пока нет — данных слишком мало.";
+    [Parameter] public string? Empty { get; set; }
+
+    private string EmptyText => Empty ?? Txt.S("Выводов пока нет — данных слишком мало.", "No conclusions yet — there is too little data.");
 
     private static string Tone(InsightTone t) => t switch
     {

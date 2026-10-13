@@ -133,8 +133,10 @@ public sealed class SegmentAnalyzer
         AllEarlierSuccesses = included.Count(IsEarlierSuccess);
     }
 
-    /// <summary>Cohorts compared by the trend, e.g. "2023–2024 против 2021–2022".</summary>
-    public string TrendCohorts => $"{_recentFrom}–{_recentTo} против {_earlierFrom}–{_earlierTo}";
+    /// <summary>Cohorts compared by the trend, e.g. "2023–2024 vs 2021–2022".</summary>
+    public string TrendCohorts => ItchDB.Core.TextLang.Current == ItchDB.Core.UiLanguage.En
+        ? $"{_recentFrom}–{_recentTo} vs {_earlierFrom}–{_earlierTo}"
+        : $"{_recentFrom}–{_recentTo} против {_earlierFrom}–{_earlierTo}";
 
     private bool IsRecentSuccess(GameRow g) => g.Ratings >= _p.SuccessThreshold && g.Year >= _recentFrom && g.Year <= _recentTo;
 
@@ -312,21 +314,43 @@ public sealed class SegmentAnalyzer
         }
     }
 
-    public static string QuadrantName(Quadrant q) => q switch
-    {
-        Quadrant.BlueOcean => "Голубой океан",
-        Quadrant.RedOcean => "Красный океан",
-        Quadrant.QuietNiche => "Тихая ниша",
-        Quadrant.Trap => "Ловушка",
-        _ => "мало данных",
-    };
+    public static string QuadrantName(Quadrant q) => QuadrantName(q, TextLang.Current);
 
-    public static string QuadrantHint(Quadrant q) => q switch
-    {
-        Quadrant.BlueOcean => "Спрос выше медианы, игр меньше медианы — лучшие условия для входа.",
-        Quadrant.RedOcean => "Спрос высокий, но и игр очень много: нужна сильная игра или заметный крючок.",
-        Quadrant.QuietNiche => "Игр мало и спрос скромный: легко выделиться, но потолок аудитории ниже.",
-        Quadrant.Trap => "Игр много, а типичная игра получает мало оценок — сложнее всего выстрелить.",
-        _ => "Меньше минимальной выборки игр с оценками — выводы ненадёжны.",
-    };
+    public static string QuadrantName(Quadrant q, UiLanguage language) => language == UiLanguage.En
+        ? q switch
+        {
+            Quadrant.BlueOcean => "Blue ocean",
+            Quadrant.RedOcean => "Red ocean",
+            Quadrant.QuietNiche => "Quiet niche",
+            Quadrant.Trap => "Trap",
+            _ => "too little data",
+        }
+        : q switch
+        {
+            Quadrant.BlueOcean => "Голубой океан",
+            Quadrant.RedOcean => "Красный океан",
+            Quadrant.QuietNiche => "Тихая ниша",
+            Quadrant.Trap => "Ловушка",
+            _ => "мало данных",
+        };
+
+    public static string QuadrantHint(Quadrant q) => QuadrantHint(q, TextLang.Current);
+
+    public static string QuadrantHint(Quadrant q, UiLanguage language) => language == UiLanguage.En
+        ? q switch
+        {
+            Quadrant.BlueOcean => "Demand above the median and fewer games than the median — the easiest place to enter.",
+            Quadrant.RedOcean => "Demand is high, and so is the number of games: the game itself has to stand out.",
+            Quadrant.QuietNiche => "Few games and modest demand: easier to be noticed, lower audience ceiling.",
+            Quadrant.Trap => "Many games, and a typical one gets few ratings — the hardest place to break out.",
+            _ => "Fewer rated games than the minimum sample — the conclusion is unreliable.",
+        }
+        : q switch
+        {
+            Quadrant.BlueOcean => "Спрос выше медианы, игр меньше медианы — лучшие условия для входа.",
+            Quadrant.RedOcean => "Спрос высокий, но и игр очень много: нужна сильная игра или заметный крючок.",
+            Quadrant.QuietNiche => "Игр мало и спрос скромный: легко выделиться, но потолок аудитории ниже.",
+            Quadrant.Trap => "Игр много, а типичная игра получает мало оценок — сложнее всего выстрелить.",
+            _ => "Меньше минимальной выборки игр с оценками — выводы ненадёжны.",
+        };
 }

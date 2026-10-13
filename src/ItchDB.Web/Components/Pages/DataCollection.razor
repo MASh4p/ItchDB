@@ -10,76 +10,79 @@
 @inject BrowserFetcher Browser
 @inject ISnackbar Snackbar
 
-<PageTitle>Сбор данных — ItchDB</PageTitle>
+<PageTitle>@Txt.S("Сбор данных", "Data collection") — ItchDB</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-1">Сбор данных</MudText>
+<MudText Typo="Typo.h4" Class="mb-1">@Txt.S("Сбор данных", "Data collection")</MudText>
 <MudText Class="itch-muted mb-4" Style="max-width:1000px">
-    У itch.io нет открытого API каталога, поэтому ItchDB читает публичные страницы как обычный браузер.
-    Одновременно открыто до @Math.Clamp(Settings.Current.ParallelRequests, 1, 8) вкладок. Каждая ждёт только свою загрузку, затем эта вкладка отдыхает:
-    списки и теги — @Fmt.N(Settings.Current.RequestIntervalMs / 1000.0, 1)–@Fmt.N((Settings.Current.RequestIntervalMs + Settings.Current.RequestJitterMs) / 1000.0, 1) с,
-    страницы игр — @Fmt.N(Settings.Current.GamePageIntervalMs / 1000.0, 0) с. Остальные вкладки в это время не стоят.
-    Данные хранятся локально, каждый запуск продолжает с места остановки. Сбор идёт только пока приложение открыто.
+    @{
+        var tabs = Math.Clamp(Settings.Current.ParallelRequests, 1, 8);
+        var listFrom = Fmt.N(Settings.Current.RequestIntervalMs / 1000.0, 1);
+        var listTo = Fmt.N((Settings.Current.RequestIntervalMs + Settings.Current.RequestJitterMs) / 1000.0, 1);
+        var gamePause = Fmt.N(Settings.Current.GamePageIntervalMs / 1000.0, 0);
+    }
+    @Txt.S($"У itch.io нет открытого API каталога, поэтому ItchDB читает публичные страницы как обычный браузер. Одновременно открыто до {tabs} вкладок. Каждая ждёт только свою загрузку, затем эта вкладка отдыхает: списки и теги — {listFrom}–{listTo} с, страницы игр — {gamePause} с. Остальные вкладки в это время не стоят. Данные хранятся локально, каждый запуск продолжает с места остановки. Сбор идёт только пока приложение открыто.",
+           $"itch.io has no public catalog API, so ItchDB reads public pages like a normal browser. Up to {tabs} tabs stay open at once. Each one waits only for its own load, then that tab rests: lists and tags for {listFrom}–{listTo} s, game pages for {gamePause} s. The other tabs do not wait. Data is stored locally, and each run continues from where it stopped. The crawl runs only while the app is open.")
 </MudText>
 
 <MudGrid Spacing="3">
     <MudItem xs="12" lg="7">
         <MudPaper Class="pa-4 itch-card">
             <div class="d-flex align-center mb-2">
-                <MudText Typo="Typo.h6">Текущий сбор</MudText>
+                <MudText Typo="Typo.h6">@Txt.S("Текущий сбор", "Current crawl")</MudText>
                 <MudSpacer />
                 @if (Crawl.State == CrawlState.Running)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Pause" OnClick="Crawl.Pause" Class="mr-2">Пауза</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Pause" OnClick="Crawl.Pause" Class="mr-2">@Txt.S("Пауза", "Pause")</MudButton>
                 }
                 else if (Crawl.State == CrawlState.Paused)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="Crawl.Resume" Class="mr-2">Продолжить</MudButton>
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.OpenInBrowser" OnClick="OpenBrowserAsync" Class="mr-2">Открыть браузер</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="Crawl.Resume" Class="mr-2">@Txt.S("Продолжить", "Resume")</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.OpenInBrowser" OnClick="OpenBrowserAsync" Class="mr-2">@Txt.S("Открыть браузер", "Open browser")</MudButton>
                 }
                 @if (Crawl.IsBusy && Crawl.State != CrawlState.Stopping)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop" OnClick="Crawl.Stop">Остановить</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop" OnClick="Crawl.Stop">@Txt.S("Остановить", "Stop")</MudButton>
                 }
             </div>
 
             @if (Crawl.IsBusy)
             {
                 <MudText Typo="Typo.subtitle1">
-                    @(Crawl.Profile is { } p ? CrawlProfiles.Name(p) : "") · @StateLabel
-                    <span class="itch-muted"> — запущен @Fmt.Ago(Crawl.StartedAt) (@Crawl.Trigger)</span>
+                    @(Crawl.Profile is { } p ? ProfileName(p) : "") · @StateLabel
+                    <span class="itch-muted"> — @Txt.S($"запущен {Fmt.Ago(Crawl.StartedAt)}", $"started {Fmt.Ago(Crawl.StartedAt)}") (@CrawlText.L(Crawl.Trigger))</span>
                 </MudText>
-                <MudText Typo="Typo.body2" Class="mt-2">Задача @Crawl.JobIndex из @Crawl.JobCount: <b>@Crawl.CurrentJob</b></MudText>
+                <MudText Typo="Typo.body2" Class="mt-2">@Txt.S($"Задача {Crawl.JobIndex} из {Crawl.JobCount}:", $"Task {Crawl.JobIndex} of {Crawl.JobCount}:") <b>@CrawlText.L(Crawl.CurrentJob)</b></MudText>
                 <MudProgressLinear Color="Color.Primary" Value="@JobProgress" Class="my-2" Rounded="true" Size="Size.Medium" />
                 @if (Crawl.StepText is { } step)
                 {
-                    <MudText Typo="Typo.body2" Class="itch-muted" Style="word-break:break-all">@step</MudText>
+                    <MudText Typo="Typo.body2" Class="itch-muted" Style="word-break:break-all">@CrawlText.L(step)</MudText>
                     @if (Crawl.StepTotal > 0)
                     {
                         <MudProgressLinear Color="Color.Info" Value="@(100.0 * Crawl.StepDone / Math.Max(1, Crawl.StepTotal))" Class="my-2" Rounded="true" />
                     }
                 }
                 <div class="d-flex flex-wrap gap-6 mt-3">
-                    <Kpi Label="Запросов" Value="@($"{Fmt.N(Crawl.Requests)} / {Fmt.N(Crawl.RequestBudget)}")" />
-                    <Kpi Label="Игр обновлено" Value="@Fmt.N(Crawl.GamesUpserted)" />
-                    <Kpi Label="Ошибок сети" Value="@Fmt.N(Crawl.Errors)" />
-                    <Kpi Label="Ошибок разбора" Value="@Fmt.N(Crawl.ParseErrors)" />
+                    <Kpi Label="@Txt.S("Запросов", "Requests")" Value="@($"{Fmt.N(Crawl.Requests)} / {Fmt.N(Crawl.RequestBudget)}")" />
+                    <Kpi Label="@Txt.S("Игр обновлено", "Games updated")" Value="@Fmt.N(Crawl.GamesUpserted)" />
+                    <Kpi Label="@Txt.S("Ошибок сети", "Network errors")" Value="@Fmt.N(Crawl.Errors)" />
+                    <Kpi Label="@Txt.S("Ошибок разбора", "Parse errors")" Value="@Fmt.N(Crawl.ParseErrors)" />
                 </div>
             }
             else
             {
-                <MudText Class="itch-muted">Сейчас ничего не собирается.</MudText>
+                <MudText Class="itch-muted">@Txt.S("Сейчас ничего не собирается.", "Nothing is being collected right now.")</MudText>
                 @if (Crawl.LastStatus is { } last)
                 {
                     <MudAlert Severity="@(last == CrawlRunStatus.Completed ? Severity.Success : last == CrawlRunStatus.Failed ? Severity.Error : Severity.Info)" Dense="true" Class="mt-3">
-                        Последний запуск @Fmt.Ago(Crawl.LastFinishedAt): @RunStatusName(last). @Crawl.LastMessage
+                        @Txt.S($"Последний запуск {Fmt.Ago(Crawl.LastFinishedAt)}: {RunStatusName(last)}.", $"Last run {Fmt.Ago(Crawl.LastFinishedAt)}: {RunStatusName(last)}.") @CrawlText.L(Crawl.LastMessage)
                     </MudAlert>
                 }
                 <MudText Typo="Typo.body2" Class="mt-3">
-                    Автообновление: <b>@(Settings.Current.AutoDailyEnabled ? $"раз в {Settings.Current.DailyIntervalHours} ч" : "выключено")</b>.
-                    Последнее успешное: @Fmt.Ago(_lastSuccess).
+                    @Txt.S("Автообновление:", "Auto-update:") <b>@(Settings.Current.AutoDailyEnabled ? Txt.S($"раз в {Settings.Current.DailyIntervalHours} ч", $"every {Settings.Current.DailyIntervalHours} h") : Txt.S("выключено", "off"))</b>.
+                    @Txt.S($"Последнее успешное: {Fmt.Ago(_lastSuccess)}.", $"Last success: {Fmt.Ago(_lastSuccess)}.")
                     @if (Settings.Current.AutoDailyEnabled && _nextDue is { } next)
                     {
-                        <span>Следующее: @(next <= DateTime.UtcNow ? "в ближайшую минуту" : Fmt.Local(next)).</span>
+                        <span>@Txt.S("Следующее:", "Next:") @(next <= DateTime.UtcNow ? Txt.S("в ближайшую минуту", "within a minute") : Fmt.Local(next)).</span>
                     }
                 </MudText>
             }
@@ -88,16 +91,16 @@
 
     <MudItem xs="12" lg="5">
         <MudPaper Class="pa-4 itch-card">
-            <MudText Typo="Typo.h6" Class="mb-2">Сеть и Cloudflare</MudText>
+            <MudText Typo="Typo.h6" Class="mb-2">@Txt.S("Сеть и Cloudflare", "Network and Cloudflare")</MudText>
             <div class="d-flex flex-wrap gap-6">
-                <Kpi Label="Запросов за сессию" Value="@Fmt.N(Net.TotalRequests)" />
-                <Kpi Label="Неудачных" Value="@Fmt.N(Net.FailedRequests)" />
-                <Kpi Label="Последний код" Value="@(Net.LastStatusCode == 0 ? "—" : Net.LastStatusCode.ToString())" />
+                <Kpi Label="@Txt.S("Запросов за сессию", "Requests this session")" Value="@Fmt.N(Net.TotalRequests)" />
+                <Kpi Label="@Txt.S("Неудачных", "Failed")" Value="@Fmt.N(Net.FailedRequests)" />
+                <Kpi Label="@Txt.S("Последний код", "Last status")" Value="@(Net.LastStatusCode == 0 ? "—" : Net.LastStatusCode.ToString())" />
                 <Kpi Label="Cookies" Value="@Cookies.Count.ToString()" />
             </div>
             @if (Net.LastUrl is { } url)
             {
-                <MudText Typo="Typo.caption" Class="itch-muted d-block mt-2" Style="word-break:break-all">Последний запрос @Fmt.Ago(Net.LastRequestAt): @url</MudText>
+                <MudText Typo="Typo.caption" Class="itch-muted d-block mt-2" Style="word-break:break-all">@Txt.S($"Последний запрос {Fmt.Ago(Net.LastRequestAt)}:", $"Last request {Fmt.Ago(Net.LastRequestAt)}:") @url</MudText>
             }
 
             @if (Net.IsPaused && Net.PausedUntil is { } until)
@@ -105,70 +108,69 @@
                 <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">
                     @if (Net.ConsecutiveChallenges > 0)
                     {
-                        @(Net.Notice ?? $"itch.io не пускает запросы — проверка ({Net.ConsecutiveChallenges}-й раз подряд).")
-                        <text> Сбор продолжится через @Fmt.Countdown(until). Новый запуск снимает эту паузу.
-                        Если в окне проверка, пройдите её там.</text>
+                        @(Net.Notice is { } n ? CrawlText.L(n) : Txt.S($"itch.io не пускает запросы — проверка ({Net.ConsecutiveChallenges}-й раз подряд).", $"itch.io is blocking requests — check ({Net.ConsecutiveChallenges} in a row)."))
+                        <text> @Txt.S($"Сбор продолжится через {Fmt.Countdown(until)}. Новый запуск снимает эту паузу. Если в окне проверка, пройдите её там.", $"The crawl continues in {Fmt.Countdown(until)}. A new run clears this pause. If the window shows a check, complete it there.")</text>
                     }
                     else
                     {
-                        @(Net.Notice ?? "Короткая пауза.")
-                        <text> Сбор продолжится через @Fmt.Countdown(until).</text>
+                        @(Net.Notice is { } n2 ? CrawlText.L(n2) : Txt.S("Короткая пауза.", "A short pause."))
+                        <text> @Txt.S($"Сбор продолжится через {Fmt.Countdown(until)}.", $"The crawl continues in {Fmt.Countdown(until)}.")</text>
                     }
                     <div class="d-flex flex-wrap gap-2 mt-2">
-                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.OpenInBrowser" OnClick="OpenBrowserAsync">Открыть браузер</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="Net.SkipPause">Продолжить сейчас</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="ResetBrowserAsync" Disabled="_importBusy">Сбросить сеанс</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.OpenInBrowser" OnClick="OpenBrowserAsync">@Txt.S("Открыть браузер", "Open browser")</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="Net.SkipPause">@Txt.S("Продолжить сейчас", "Continue now")</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="ResetBrowserAsync" Disabled="_importBusy">@Txt.S("Сбросить сеанс", "Reset session")</MudButton>
                     </div>
                 </MudAlert>
             }
             else if (Net.Notice is { } notice)
             {
                 <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true">
-                    @notice
+                    @CrawlText.L(notice)
                     <div class="mt-2">
-                        <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.OpenInBrowser" OnClick="OpenBrowserAsync">Открыть браузер</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.OpenInBrowser" OnClick="OpenBrowserAsync">@Txt.S("Открыть браузер", "Open browser")</MudButton>
                     </div>
                 </MudAlert>
             }
             else if (Net.IsBlocked)
             {
                 <MudAlert Severity="Severity.Error" Class="mt-3" Dense="true">
-                    Cloudflare не пропускает запросы после нескольких пауз. Откройте браузер и пройдите проверку на itch.io или импортируйте свежий cf_clearance. Новый запуск снимает паузу.
+                    @Txt.S("Cloudflare не пропускает запросы после нескольких пауз. Откройте браузер и пройдите проверку на itch.io или импортируйте свежий cf_clearance. Новый запуск снимает паузу.",
+                           "Cloudflare is still blocking requests after several pauses. Open the browser and complete the check on itch.io, or import a fresh cf_clearance. A new run clears the pause.")
                     <div class="mt-2">
-                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.OpenInBrowser" OnClick="OpenBrowserAsync">Открыть браузер</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.OpenInBrowser" OnClick="OpenBrowserAsync">@Txt.S("Открыть браузер", "Open browser")</MudButton>
                     </div>
                 </MudAlert>
             }
             else if (Net.LastChallengeAt is { } ch)
             {
-                <MudText Typo="Typo.caption" Class="itch-muted d-block mt-2">Последняя проверка Cloudflare: @Fmt.Ago(ch)</MudText>
+                <MudText Typo="Typo.caption" Class="itch-muted d-block mt-2">@Txt.S($"Последняя проверка Cloudflare: {Fmt.Ago(ch)}", $"Last Cloudflare check: {Fmt.Ago(ch)}")</MudText>
             }
 
             <MudDivider Class="my-3" />
-            <MudText Typo="Typo.subtitle2">Если Cloudflare блокирует сбор</MudText>
+            <MudText Typo="Typo.subtitle2">@Txt.S("Если Cloudflare блокирует сбор", "If Cloudflare blocks the crawl")</MudText>
             <MudText Typo="Typo.body2" Class="itch-muted mb-2">
-                Сбор открывает отдельное окно Chrome (или Edge). Проверка Cloudflare проходит в нём: чаще всего сама,
-                иногда нужно нажать её в этом окне. Пауза на 10 минут начинается, только если за 3 минуты проверка так и не исчезла.
-                Вставленный сюда cookie приложению не подходит — Cloudflare привязывает его к браузеру, поэтому код 403 остаётся.
+                @Txt.S("Сбор открывает отдельное окно Chrome (или Edge). Проверка Cloudflare проходит в нём: чаще всего сама, иногда нужно нажать её в этом окне. Пауза на 10 минут начинается, только если за 3 минуты проверка так и не исчезла. Вставленный сюда cookie приложению не подходит — Cloudflare привязывает его к браузеру, поэтому код 403 остаётся.",
+                       "The crawl opens a separate Chrome (or Edge) window. The Cloudflare check usually passes there on its own; sometimes you have to click it in that window. A 10-minute pause starts only if the check is still there after 3 minutes. A cookie pasted here does not work for the app — Cloudflare ties it to the browser, so a 403 remains.")
             </MudText>
-            <MudTextField T="string" @bind-Value="_cfClearance" Label="cf_clearance или строка Cookie" Variant="Variant.Outlined" Margin="Margin.Dense"
+            <MudTextField T="string" @bind-Value="_cfClearance" Label="@Txt.S("cf_clearance или строка Cookie", "cf_clearance or a Cookie header")" Variant="Variant.Outlined" Margin="Margin.Dense"
                           Lines="2" Class="mb-2" Disabled="_importBusy" />
-            <MudTextField T="string" @bind-Value="_userAgent" Label="User-Agent браузера" Variant="Variant.Outlined" Margin="Margin.Dense"
+            <MudTextField T="string" @bind-Value="_userAgent" Label="@Txt.S("User-Agent браузера", "Browser User-Agent")" Variant="Variant.Outlined" Margin="Margin.Dense"
                           Lines="2" Class="mb-2" Disabled="_importBusy" />
             <div class="d-flex align-center gap-2">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImportCfAsync" Disabled="@(string.IsNullOrWhiteSpace(_cfClearance) || _importBusy)">
-                    @(_importBusy ? "Проверяю…" : "Импорт и проверка")
+                    @(_importBusy ? Txt.S("Проверяю…", "Checking…") : Txt.S("Импорт и проверка", "Import and check"))
                 </MudButton>
-                <MudTooltip Text="Закрыть окно сбора и удалить его профиль. Следующий запрос откроет чистый Chrome, без cookie, из-за которых страница отвечает 400.">
-                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.RestartAlt" OnClick="ResetBrowserAsync" Disabled="_importBusy">Сбросить сеанс</MudButton>
+                <MudTooltip Text="@Txt.S("Закрыть окно сбора и удалить его профиль. Следующий запрос откроет чистый Chrome, без cookie, из-за которых страница отвечает 400.", "Close the crawl window and delete its profile. The next request opens a clean Chrome, without the cookies that make the page return 400.")">
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.RestartAlt" OnClick="ResetBrowserAsync" Disabled="_importBusy">@Txt.S("Сбросить сеанс", "Reset session")</MudButton>
                 </MudTooltip>
-                <MudTooltip Text="Удалить все cookies itch.io">
+                <MudTooltip Text="@Txt.S("Удалить все cookies itch.io", "Delete all itch.io cookies")">
                     <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep" OnClick="ClearCookiesAsync" Disabled="_importBusy" />
                 </MudTooltip>
             </div>
             @if (_importNote is { } note)
             {
-                <MudAlert Severity="@(_importOk ? Severity.Success : Severity.Warning)" Dense="true" Class="mt-2">@note</MudAlert>
+                <MudAlert Severity="@(_importOk ? Severity.Success : Severity.Warning)" Dense="true" Class="mt-2">@CrawlText.L(note)</MudAlert>
             }
         </MudPaper>
     </MudItem>
@@ -184,19 +186,19 @@
                         <MudIcon Icon="@ProfileIcon(profile)" Color="Color.Primary" />
                     </CardHeaderAvatar>
                     <CardHeaderContent>
-                        <MudText Typo="Typo.h6">@CrawlProfiles.Name(profile)</MudText>
+                        <MudText Typo="Typo.h6">@ProfileName(profile)</MudText>
                         <MudText Typo="Typo.caption" Class="itch-muted">
                             @if (allPages)
                             {
-                                <text>все игры без карточки, сразу в нескольких вкладках</text>
+                                <text>@Txt.S("все игры без карточки, сразу в нескольких вкладках", "every game without a page, in several tabs at once")</text>
                                 @if (_stats is { } left)
                                 {
-                                    <text> · осталось @Fmt.N(Math.Max(0, left.Games - left.GamesWithDetails))</text>
+                                    <text> · @Txt.S($"осталось {Fmt.N(Math.Max(0, left.Games - left.GamesWithDetails))}", $"{Fmt.N(Math.Max(0, left.Games - left.GamesWithDetails))} left")</text>
                                 }
                             }
                             else
                             {
-                                <text>до ~@Fmt.N(requests) запросов ≈ @Fmt.Duration(EstimateTime(requests))</text>
+                                <text>@Txt.S($"до ~{Fmt.N(requests)} запросов ≈ {Fmt.Duration(EstimateTime(requests))}", $"up to ~{Fmt.N(requests)} requests ≈ {Fmt.Duration(EstimateTime(requests))}")</text>
                             }
                         </MudText>
                     </CardHeaderContent>
@@ -207,11 +209,11 @@
                 <MudCardActions>
                     <MudButton Variant="@(profile == RecommendedProfile ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.PlayArrow" Disabled="@Crawl.IsBusy" OnClick="@(() => Start(profile))">
-                        Запустить
+                        @Txt.S("Запустить", "Start")
                     </MudButton>
                     @if (profile == RecommendedProfile)
                     {
-                        <MudText Typo="Typo.caption" Class="ml-3 itch-muted">рекомендуется сейчас</MudText>
+                        <MudText Typo="Typo.caption" Class="ml-3 itch-muted">@Txt.S("рекомендуется сейчас", "recommended now")</MudText>
                     }
                 </MudCardActions>
             </MudCard>
@@ -221,9 +223,9 @@
     <MudItem xs="12" lg="7">
         <MudPaper Class="pa-4 itch-card">
             <div class="d-flex align-center mb-2">
-                <MudText Typo="Typo.h6">Журнал</MudText>
+                <MudText Typo="Typo.h6">@Txt.S("Журнал", "Log")</MudText>
                 <MudSpacer />
-                <MudSwitch T="bool" @bind-Value="_onlyProblems" Label="Только предупреждения" Color="Color.Warning" />
+                <MudSwitch T="bool" @bind-Value="_onlyProblems" Label="@Txt.S("Только предупреждения", "Warnings only")" Color="Color.Warning" />
             </div>
             <div class="itch-log">
                 @{
@@ -231,11 +233,11 @@
                 }
                 @if (entries.Count == 0)
                 {
-                    <div class="itch-muted">Записей пока нет.</div>
+                    <div class="itch-muted">@Txt.S("Записей пока нет.", "No entries yet.")</div>
                 }
                 @foreach (var e in entries)
                 {
-                    <div class="@LogClass(e.Level)">@Fmt.Local(e.At, "HH:mm:ss") @e.Message</div>
+                    <div class="@LogClass(e.Level)">@Fmt.Local(e.At, "HH:mm:ss") @CrawlText.L(e.Message)</div>
                 }
             </div>
         </MudPaper>
@@ -244,7 +246,7 @@
     <MudItem xs="12" lg="5">
         <MudPaper Class="pa-4 itch-card">
             <div class="d-flex align-center mb-2">
-                <MudText Typo="Typo.h6">База данных</MudText>
+                <MudText Typo="Typo.h6">@Txt.S("База данных", "Database")</MudText>
                 <MudSpacer />
                 <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="LoadAsync" />
             </div>
@@ -252,17 +254,17 @@
             {
                 <MudSimpleTable Dense="true" Elevation="0" Class="mud-transparent">
                     <tbody>
-                        <tr><td>Игр в базе</td><td class="itch-num">@Fmt.N(s.Games) <span class="itch-muted">(18+: @Fmt.N(s.NsfwGames))</span></td></tr>
-                        <tr><td>С оценками</td><td class="itch-num">@Fmt.N(s.RatedGames)</td></tr>
-                        <tr><td>Загружены страницы (теги, даты, движок)</td><td class="itch-num">@Fmt.N(s.GamesWithDetails)</td></tr>
-                        <tr><td>Всего на itch.io (по счётчику)</td><td class="itch-num">@Fmt.N(s.CatalogTotal)</td></tr>
-                        <tr><td>Счётчиков списков (тег, жанр, год…)</td><td class="itch-num">@Fmt.N(s.ListingCounters)</td></tr>
-                        <tr><td>Разработчиков / с профилем</td><td class="itch-num">@Fmt.N(s.Developers) / @Fmt.N(s.DevelopersWithProfile)</td></tr>
-                        <tr><td>Тегов и фильтров</td><td class="itch-num">@Fmt.N(s.Tags)</td></tr>
-                        <tr><td>Джемов / с участниками</td><td class="itch-num">@Fmt.N(s.Jams) / @Fmt.N(s.JamsWithEntries) <span class="itch-muted">(@Fmt.N(s.JamEntries) заявок)</span></td></tr>
-                        <tr><td>Дней истории</td><td class="itch-num">@Fmt.N(s.SnapshotDays) <span class="itch-muted">с @Fmt.Date(s.FirstSnapshotDay)</span></td></tr>
-                        <tr><td>Списков: готово / дробится / в процессе</td><td class="itch-num">@Fmt.N(s.ListsComplete) / @Fmt.N(s.ListsTruncated) / @Fmt.N(s.ListsInProgress)</td></tr>
-                        <tr><td>Размер файла</td><td class="itch-num">@Fmt.N(s.DatabaseBytes / 1048576.0, 1) МБ</td></tr>
+                        <tr><td>@Txt.S("Игр в базе", "Games in the database")</td><td class="itch-num">@Fmt.N(s.Games) <span class="itch-muted">(18+: @Fmt.N(s.NsfwGames))</span></td></tr>
+                        <tr><td>@Txt.S("С оценками", "With ratings")</td><td class="itch-num">@Fmt.N(s.RatedGames)</td></tr>
+                        <tr><td>@Txt.S("Загружены страницы (теги, даты, движок)", "Pages loaded (tags, dates, engine)")</td><td class="itch-num">@Fmt.N(s.GamesWithDetails)</td></tr>
+                        <tr><td>@Txt.S("Всего на itch.io (по счётчику)", "Total on itch.io (from the counter)")</td><td class="itch-num">@Fmt.N(s.CatalogTotal)</td></tr>
+                        <tr><td>@Txt.S("Счётчиков списков (тег, жанр, год…)", "List counters (tag, genre, year…)")</td><td class="itch-num">@Fmt.N(s.ListingCounters)</td></tr>
+                        <tr><td>@Txt.S("Разработчиков / с профилем", "Developers / with a profile")</td><td class="itch-num">@Fmt.N(s.Developers) / @Fmt.N(s.DevelopersWithProfile)</td></tr>
+                        <tr><td>@Txt.S("Тегов и фильтров", "Tags and filters")</td><td class="itch-num">@Fmt.N(s.Tags)</td></tr>
+                        <tr><td>@Txt.S("Джемов / с участниками", "Jams / with entries")</td><td class="itch-num">@Fmt.N(s.Jams) / @Fmt.N(s.JamsWithEntries) <span class="itch-muted">(@Txt.S($"{Fmt.N(s.JamEntries)} заявок", $"{Fmt.N(s.JamEntries)} entries"))</span></td></tr>
+                        <tr><td>@Txt.S("Дней истории", "Days of history")</td><td class="itch-num">@Fmt.N(s.SnapshotDays) <span class="itch-muted">@Txt.S($"с {Fmt.Date(s.FirstSnapshotDay)}", $"since {Fmt.Date(s.FirstSnapshotDay)}")</span></td></tr>
+                        <tr><td>@Txt.S("Списков: готово / дробится / в процессе", "Lists: done / splitting / in progress")</td><td class="itch-num">@Fmt.N(s.ListsComplete) / @Fmt.N(s.ListsTruncated) / @Fmt.N(s.ListsInProgress)</td></tr>
+                        <tr><td>@Txt.S("Размер файла", "File size")</td><td class="itch-num">@Fmt.N(s.DatabaseBytes / 1048576.0, 1) @Txt.S("МБ", "MB")</td></tr>
                     </tbody>
                 </MudSimpleTable>
             }
@@ -275,17 +277,16 @@
 
     <MudItem xs="12">
         <MudPaper Class="pa-4">
-            <MudText Typo="Typo.h6">Покрытие каталога по годам</MudText>
+            <MudText Typo="Typo.h6">@Txt.S("Покрытие каталога по годам", "Catalog coverage by year")</MudText>
             <MudText Typo="Typo.body2" Class="itch-muted mb-3">
-                Список itch.io отдаёт максимум 200 страниц (7 200 игр). Поэтому глубокий сбор идёт по годам, а если оценённых игр за год больше —
-                дробит год по цене и жанрам. Год считается собранным, когда в топе по оценкам начинаются игры без оценок: все оценённые игры уже получены.
-                Общее число игр тега, жанра или года, включая проекты без оценок, читается со счётчика первой страницы и карточками не сохраняется.
+                @Txt.S("Список itch.io отдаёт максимум 200 страниц (7 200 игр). Поэтому глубокий сбор идёт по годам, а если оценённых игр за год больше — дробит год по цене и жанрам. Год считается собранным, когда в топе по оценкам начинаются игры без оценок: все оценённые игры уже получены. Общее число игр тега, жанра или года, включая проекты без оценок, читается со счётчика первой страницы и карточками не сохраняется.",
+                       "An itch.io list returns at most 200 pages (7,200 games). The deep crawl therefore goes year by year, and if a year has more rated games it splits the year by price and genre. A year counts as collected when unrated games start appearing in the top-rated list: every rated game has already been received. The total number of games for a tag, genre, or year, including projects with no ratings, is read from the first-page counter and is not stored as cards.")
             </MudText>
             @if (_stats is { } st)
             {
                 <MudSimpleTable Dense="true" Hover="true" Elevation="0" FixedHeader="true" Style="max-height:420px">
                     <thead>
-                        <tr><th>Год</th><th>Игр на itch.io</th><th>Известно</th><th>С оценками</th><th>Статус</th></tr>
+                        <tr><th>@Txt.S("Год", "Year")</th><th>@Txt.S("Игр на itch.io", "Games on itch.io")</th><th>@Txt.S("Известно", "Known")</th><th>@Txt.S("С оценками", "With ratings")</th><th>@Txt.S("Статус", "Status")</th></tr>
                     </thead>
                     <tbody>
                         @foreach (var y in st.Years)
@@ -296,7 +297,7 @@
                                 <td class="itch-num">@Fmt.N(y.KnownGames)@(y.TotalResults > 0 ? $" ({Fmt.Pct((double)y.KnownGames / y.TotalResults!.Value)})" : "")</td>
                                 <td class="itch-num">@Fmt.N(y.RatedGames)</td>
                                 <td>
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(y.Status == "полностью" ? Color.Success : y.Status == "не начат" ? Color.Default : Color.Info)">@y.Status</MudChip>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(y.Status == "полностью" ? Color.Success : y.Status == "не начат" ? Color.Default : Color.Info)">@YearStatus(y.Status)</MudChip>
                                 </td>
                             </tr>
                         }
@@ -307,14 +308,14 @@
                 @if (!_confirmReset)
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" StartIcon="@Icons.Material.Filled.RestartAlt" OnClick="@(() => _confirmReset = true)" Disabled="@Crawl.IsBusy">
-                        Начать глубокий сбор заново
+                        @Txt.S("Начать глубокий сбор заново", "Start the deep crawl over")
                     </MudButton>
                 }
                 else
                 {
-                    <MudText Typo="Typo.body2">Сбросить прогресс всех списков? Собранные игры останутся в базе.</MudText>
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning" OnClick="ResetCursorsAsync">Сбросить</MudButton>
-                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => _confirmReset = false)">Отмена</MudButton>
+                    <MudText Typo="Typo.body2">@Txt.S("Сбросить прогресс всех списков? Собранные игры останутся в базе.", "Reset progress for every list? Collected games stay in the database.")</MudText>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning" OnClick="ResetCursorsAsync">@Txt.S("Сбросить", "Reset")</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => _confirmReset = false)">@Txt.S("Отмена", "Cancel")</MudButton>
                 }
             </div>
         </MudPaper>
@@ -323,33 +324,33 @@
     <MudItem xs="12">
         <MudPaper Class="pa-2">
             <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pa-3">
-                <MudTabPanel Text="История запусков">
+                <MudTabPanel Text="@Txt.S("История запусков", "Run history")">
                     <MudSimpleTable Dense="true" Hover="true" Elevation="0">
                         <thead>
-                            <tr><th>Начало</th><th>Профиль</th><th>Статус</th><th>Длительность</th><th>Запросов</th><th>Игр</th><th>Ошибок</th><th>Итог</th></tr>
+                            <tr><th>@Txt.S("Начало", "Started")</th><th>@Txt.S("Профиль", "Profile")</th><th>@Txt.S("Статус", "Status")</th><th>@Txt.S("Длительность", "Duration")</th><th>@Txt.S("Запросов", "Requests")</th><th>@Txt.S("Игр", "Games")</th><th>@Txt.S("Ошибок", "Errors")</th><th>@Txt.S("Итог", "Result")</th></tr>
                         </thead>
                         <tbody>
                             @foreach (var r in _runs)
                             {
                                 <tr>
                                     <td class="itch-num">@Fmt.Local(r.StartedAt)</td>
-                                    <td>@CrawlProfiles.Name(r.Profile)</td>
+                                    <td>@ProfileName(r.Profile)</td>
                                     <td><MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@RunColor(r.Status)">@RunStatusName(r.Status)</MudChip></td>
                                     <td class="itch-num">@(r.FinishedAt is { } f ? Fmt.Duration(f - r.StartedAt) : "—")</td>
                                     <td class="itch-num">@Fmt.N(r.Requests)</td>
                                     <td class="itch-num">@Fmt.N(r.GamesUpserted)</td>
                                     <td class="itch-num">@Fmt.N(r.Errors + r.ParseErrors)</td>
-                                    <td class="itch-muted" style="max-width:520px">@r.Message</td>
+                                    <td class="itch-muted" style="max-width:520px">@CrawlText.L(r.Message)</td>
                                 </tr>
                             }
                         </tbody>
                     </MudSimpleTable>
                     @if (_runs.Count == 0)
                     {
-                        <MudText Class="itch-muted pa-2">Запусков ещё не было.</MudText>
+                        <MudText Class="itch-muted pa-2">@Txt.S("Запусков ещё не было.", "No runs yet.")</MudText>
                     }
                 </MudTabPanel>
-                <MudTabPanel Text="Настройки">
+                <MudTabPanel Text="@Txt.S("Настройки", "Settings")">
                     <SettingsEditor />
                 </MudTabPanel>
             </MudTabs>
@@ -375,11 +376,48 @@
 
     private string StateLabel => Crawl.State switch
     {
-        CrawlState.Running => "идёт",
-        CrawlState.Paused => "на паузе",
-        CrawlState.Stopping => "останавливается…",
+        CrawlState.Running => Txt.S("идёт", "running"),
+        CrawlState.Paused => Txt.S("на паузе", "paused"),
+        CrawlState.Stopping => Txt.S("останавливается…", "stopping…"),
         _ => "",
     };
+
+    private string ProfileName(CrawlProfile p) => p switch
+    {
+        CrawlProfile.QuickStart => Txt.S("Быстрый старт", "Quick start"),
+        CrawlProfile.Deep => Txt.S("Глубокий сбор", "Deep crawl"),
+        CrawlProfile.Daily => Txt.S("Ежедневное обновление", "Daily update"),
+        CrawlProfile.Tracking => Txt.S("Проверка отслеживаемых игр", "Tracked games check"),
+        CrawlProfile.GamePages => Txt.S("Карточки игр", "Game pages"),
+        _ => p.ToString(),
+    };
+
+    private string ProfileName(string stored) =>
+        Enum.TryParse<CrawlProfile>(stored, out var p) ? ProfileName(p) : stored;
+
+    private string YearStatus(string status)
+    {
+        if (status == "не начат") return Txt.S("не начат", "not started");
+        if (status == "полностью") return Txt.S("полностью", "complete");
+        if (status == "нужно дробление") return Txt.S("нужно дробление", "needs splitting");
+        if (status == "фильтр не поддерживается") return Txt.S("фильтр не поддерживается", "filter not supported");
+        if (status == "нет фильтра года — через жанры и теги")
+            return Txt.S("нет фильтра года — через жанры и теги", "no year filter — via genres and tags");
+        const string progress = "в процессе, стр. ";
+        if (status.StartsWith(progress, StringComparison.Ordinal))
+        {
+            var page = status[progress.Length..];
+            return Txt.S($"в процессе, стр. {page}", $"in progress, page {page}");
+        }
+        const string split = "дробится: ";
+        const string splitEnd = " частей готово";
+        if (status.StartsWith(split, StringComparison.Ordinal) && status.EndsWith(splitEnd, StringComparison.Ordinal))
+        {
+            var n = status[split.Length..^splitEnd.Length];
+            return Txt.S($"дробится: {n} частей готово", $"splitting: {n} parts done");
+        }
+        return status;
+    }
 
     private double JobProgress => Crawl.JobCount == 0 ? 0 : 100.0 * Math.Max(0, Crawl.JobIndex - 1) / Crawl.JobCount;
 
@@ -429,20 +467,20 @@
         {
             var opened = await Browser.OpenForUserAsync(CancellationToken.None);
             if (!opened)
-                Snackbar.Add("Chrome и Edge не найдены. Откройте itch.io в своём браузере и пройдите проверку там.", Severity.Warning);
+                Snackbar.Add(Txt.S("Chrome и Edge не найдены. Откройте itch.io в своём браузере и пройдите проверку там.", "Chrome and Edge were not found. Open itch.io in your browser and complete the check there."), Severity.Warning);
         }
         catch (Exception ex)
         {
-            Snackbar.Add("Не удалось открыть окно браузера: " + ex.Message, Severity.Warning);
+            Snackbar.Add(Txt.S("Не удалось открыть окно браузера: ", "Could not open the browser window: ") + ex.Message, Severity.Warning);
         }
     }
 
     private void Start(CrawlProfile profile)
     {
         if (Crawl.TryStart(profile, "вручную"))
-            Snackbar.Add($"Запущено: {CrawlProfiles.Name(profile)}", Severity.Info);
+            Snackbar.Add(Txt.S($"Запущено: {ProfileName(profile)}", $"Started: {ProfileName(profile)}"), Severity.Info);
         else
-            Snackbar.Add("Сбор уже идёт", Severity.Warning);
+            Snackbar.Add(Txt.S("Сбор уже идёт", "A crawl is already running"), Severity.Warning);
         _wasBusy = Crawl.IsBusy;
     }
 
@@ -473,20 +511,21 @@
         Net.SkipPause();
         _cfClearance = null;
         _importBusy = true;
-        _importNote = "Cookie сохранён. Один запрос к itch.io проверяет, пускает ли он сбор…";
+        _importNote = Txt.S("Cookie сохранён. Один запрос к itch.io проверяет, пускает ли он сбор…", "Cookie saved. One request to itch.io checks whether the crawl is allowed…");
         _importOk = true;
         try
         {
             var accepted = await Http.ProbeAsync(CancellationToken.None);
             _importOk = accepted;
             _importNote = accepted
-                ? "itch.io открыл страницу без проверки. Сбор может продолжаться."
-                : "Cookie сохранён, но itch.io снова показал проверку. User-Agent должен быть скопирован из того же браузера командой navigator.userAgent, и cookie нужно брать сразу после пройденной проверки. Если так и сделано, Cloudflare привязал прохождение к самому браузеру, и вставленный cookie приложению не подходит: сбор продолжится сам после паузы.";
+                ? Txt.S("itch.io открыл страницу без проверки. Сбор может продолжаться.", "itch.io opened the page without a check. The crawl can continue.")
+                : Txt.S("Cookie сохранён, но itch.io снова показал проверку. User-Agent должен быть скопирован из того же браузера командой navigator.userAgent, и cookie нужно брать сразу после пройденной проверки. Если так и сделано, Cloudflare привязал прохождение к самому браузеру, и вставленный cookie приложению не подходит: сбор продолжится сам после паузы.",
+                       "The cookie was saved, but itch.io showed the check again. The User-Agent must be copied from the same browser with navigator.userAgent, and the cookie must be taken right after the check is passed. If that was already done, Cloudflare tied the pass to that browser, and a pasted cookie does not work for the app: the crawl will continue on its own after the pause.");
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             _importOk = false;
-            _importNote = "Cookie сохранён, но проверить его не удалось: " + ex.Message;
+            _importNote = Txt.S("Cookie сохранён, но проверить его не удалось: ", "The cookie was saved, but it could not be checked: ") + ex.Message;
         }
         finally
         {
@@ -503,14 +542,14 @@
             Cookies.Clear();
             await Settings.SetCfClearanceAsync(null);
             Net.SkipPause();
-            _importNote = "Сеанс сброшен: окно сбора закрыто, его cookie удалены. Следующий запрос откроет чистый браузер.";
+            _importNote = Txt.S("Сеанс сброшен: окно сбора закрыто, его cookie удалены. Следующий запрос откроет чистый браузер.", "Session reset: the crawl window is closed and its cookies are gone. The next request opens a clean browser.");
             _importOk = true;
-            Snackbar.Add("Сеанс браузера сброшен", Severity.Success);
+            Snackbar.Add(Txt.S("Сеанс браузера сброшен", "Browser session reset"), Severity.Success);
         }
         catch (Exception ex)
         {
             _importOk = false;
-            _importNote = "Не удалось удалить профиль окна: " + ex.Message;
+            _importNote = Txt.S("Не удалось удалить профиль окна: ", "Could not delete the window profile: ") + ex.Message;
         }
         finally
         {
@@ -522,14 +561,14 @@
     {
         Cookies.Clear();
         await Settings.SetCfClearanceAsync(null);
-        Snackbar.Add("Cookies удалены", Severity.Info);
+        Snackbar.Add(Txt.S("Cookies удалены", "Cookies deleted"), Severity.Info);
     }
 
     private async Task ResetCursorsAsync()
     {
         var n = await Cursors.DeleteAsync("list:");
         _confirmReset = false;
-        Snackbar.Add($"Сброшено курсоров: {n}", Severity.Info);
+        Snackbar.Add(Txt.S($"Сброшено курсоров: {n}", $"Cursors reset: {n}"), Severity.Info);
         await LoadAsync();
     }
 
@@ -555,28 +594,29 @@
         return p switch
         {
             CrawlProfile.QuickStart =>
-                $"Первые данные за полчаса: каталог тегов, топ по оценкам по всему itch.io, за два последних года, по 18 жанрам и {s.QuickTopTags} крупнейшим тегам; " +
-                $"позиции в popular, новые релизы, featured, {s.QuickDetails} страниц игр, профили и джемы. Статистика приблизительная — смещена к популярным играм, это отмечено меткой покрытия.",
+                Txt.S($"Первые данные за полчаса: каталог тегов, топ по оценкам по всему itch.io, за два последних года, по 18 жанрам и {s.QuickTopTags} крупнейшим тегам; позиции в popular, новые релизы, featured, {s.QuickDetails} страниц игр, профили и джемы. Статистика приблизительная — смещена к популярным играм, это отмечено меткой покрытия.",
+                      $"First data in about half an hour: the tag catalog, top rated across itch.io, the last two years, 18 genres and the {s.QuickTopTags} largest tags; popular positions, new releases, featured, {s.QuickDetails} game pages, profiles and jams. The stats are approximate and skewed toward popular games, which the coverage label marks."),
             CrawlProfile.Daily =>
-                $"Раз в сутки или по кнопке «Обновить»: счётчики списков, позиции в popular по {s.DailyPopularTags} тегам, отслеживаемые игры, свежие оценки топов, новые релизы, " +
-                $"{s.DailyDetails} страниц игр, {s.DailyProfiles} профилей, джемы и порция глубокого сбора. Ежедневные снимки дают тренды и «горячее».",
+                Txt.S($"Раз в сутки или по кнопке «Обновить»: счётчики списков, позиции в popular по {s.DailyPopularTags} тегам, отслеживаемые игры, свежие оценки топов, новые релизы, {s.DailyDetails} страниц игр, {s.DailyProfiles} профилей, джемы и порция глубокого сбора. Ежедневные снимки дают тренды и «горячее».",
+                      $"Once a day, or from the Refresh button: listing counters, popular positions for {s.DailyPopularTags} tags, tracked games, fresh ratings on the tops, new releases, {s.DailyDetails} game pages, {s.DailyProfiles} profiles, jams and a slice of the deep crawl. Daily snapshots produce trends and Hot."),
             CrawlProfile.GamePages =>
-                "Только страницы игр: полные теги, дата выхода, движок, скриншоты и статус. Списки не качаются. " +
-                "Сначала игры с наибольшим числом оценок. Вкладки грузят страницы параллельно и ждут только свою загрузку, " +
-                $"затем каждая отдыхает {Fmt.N(s.GamePageIntervalMs / 1000.0, 0)} с. Остановка сохраняет прогресс, следующий запуск продолжит с оставшихся.",
+                Txt.S("Только страницы игр: полные теги, дата выхода, движок, скриншоты и статус. Списки не качаются. Сначала игры с наибольшим числом оценок. Вкладки грузят страницы параллельно и ждут только свою загрузку, " +
+                      $"затем каждая отдыхает {Fmt.N(s.GamePageIntervalMs / 1000.0, 0)} с. Остановка сохраняет прогресс, следующий запуск продолжит с оставшихся.",
+                      "Game pages only: full tags, release date, engine, screenshots and status. Lists are not downloaded. Games with the most ratings go first. Tabs load pages in parallel and wait only for their own load, " +
+                      $"then each rests {Fmt.N(s.GamePageIntervalMs / 1000.0, 0)} s. Stopping saves progress; the next run continues with what is left."),
             _ =>
-                $"Сначала счётчики списков (сколько всего игр у тега или жанра, включая нули — сами такие игры не скачиваются), затем страницы самых популярных игр и списки: годы, жанры, теги от {s.DeepMinTagProjects} проектов, движки и в конце 18+. " +
-                "Списки длиннее 200 страниц дробятся. Уже пройденное пропускается. Страницы игр качаются в своих вкладках параллельно со списками; полный проход — отдельной кнопкой «Карточки игр».",
+                Txt.S($"Сначала счётчики списков (сколько всего игр у тега или жанра, включая нули — сами такие игры не скачиваются), затем страницы самых популярных игр и списки: годы, жанры, теги от {s.DeepMinTagProjects} проектов, движки и в конце 18+. Списки длиннее 200 страниц дробятся. Уже пройденное пропускается. Страницы игр качаются в своих вкладках параллельно со списками; полный проход — отдельной кнопкой «Карточки игр».",
+                      $"Listing counters first (how many games a tag or genre has, including zeros — those games themselves are not downloaded), then pages of the most popular games and the lists: years, genres, tags from {s.DeepMinTagProjects} projects, engines, and 18+ last. Lists longer than 200 pages are split. What is already done is skipped. Game pages download in their own tabs in parallel with the lists; a full pass is the separate Game pages button."),
         };
     }
 
-    private static string RunStatusName(CrawlRunStatus s) => s switch
+    private string RunStatusName(CrawlRunStatus s) => s switch
     {
-        CrawlRunStatus.Running => "идёт",
-        CrawlRunStatus.Completed => "завершён",
-        CrawlRunStatus.Stopped => "остановлен",
-        CrawlRunStatus.Failed => "ошибка",
-        CrawlRunStatus.Interrupted => "прерван закрытием",
+        CrawlRunStatus.Running => Txt.S("идёт", "running"),
+        CrawlRunStatus.Completed => Txt.S("завершён", "completed"),
+        CrawlRunStatus.Stopped => Txt.S("остановлен", "stopped"),
+        CrawlRunStatus.Failed => Txt.S("ошибка", "failed"),
+        CrawlRunStatus.Interrupted => Txt.S("прерван закрытием", "interrupted by closing"),
         _ => s.ToString(),
     };
 

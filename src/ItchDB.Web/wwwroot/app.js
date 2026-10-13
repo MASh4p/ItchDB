@@ -9,3 +9,7 @@ window.itchDownload = async (fileName, streamReference, mime) => {
     a.remove();
     URL.revokeObjectURL(url);
 };
+
+window.itchSetLang = (code) => {
+    document.documentElement.lang = code === "en" ? "en" : "ru";
+};

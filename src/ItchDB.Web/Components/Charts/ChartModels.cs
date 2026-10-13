@@ -1,4 +1,6 @@
+using ItchDB.Core;
 using ItchDB.Core.Analytics;
+using ItchDB.Core.Catalog;
 using ItchDB.Web.Services;
 
 namespace ItchDB.Web.Components.Charts;
@@ -27,9 +29,9 @@ public static class ChartData
     {
         var series = new List<ChartSeries>();
         if (years.Any(y => y.TotalItch is not null))
-            series.Add(new("Игр на itch.io", years.Select(y => new ChartPoint(y.Year.ToString(), y.TotalItch ?? 0)).ToList(), ChartKind.Bar, Color: "#3A3F58"));
-        series.Add(new("В базе", years.Select(y => new ChartPoint(y.Year.ToString(), y.Known)).ToList(), ChartKind.Bar, Color: "#2F6F8F"));
-        series.Add(new("Среднее оценок", years.Select(y => new ChartPoint(y.Year.ToString(), double.IsNaN(y.Mean) ? 0 : y.Mean)).ToList(),
+            series.Add(new(CatalogNames.Pick(TextLang.Current, "Игр на itch.io", "Games on itch.io"), years.Select(y => new ChartPoint(y.Year.ToString(), y.TotalItch ?? 0)).ToList(), ChartKind.Bar, Color: "#3A3F58"));
+        series.Add(new(CatalogNames.Pick(TextLang.Current, "В базе", "In the database"), years.Select(y => new ChartPoint(y.Year.ToString(), y.Known)).ToList(), ChartKind.Bar, Color: "#2F6F8F"));
+        series.Add(new(CatalogNames.Pick(TextLang.Current, "Среднее оценок", "Mean ratings"), years.Select(y => new ChartPoint(y.Year.ToString(), double.IsNaN(y.Mean) ? 0 : y.Mean)).ToList(),
             ChartKind.Line, SecondAxis: true, Color: ItchTheme.Accent, AxisDecimals: 1));
         return series;
     }

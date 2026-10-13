@@ -2,12 +2,12 @@
 @inherits AnalyticsPage
 @inject DataQueries Queries
 
-<PageTitle>@(_vm?.Name ?? "Разработчик") — ItchDB</PageTitle>
+<PageTitle>@(_vm?.Name ?? Txt.S("Разработчик", "Developer")) — ItchDB</PageTitle>
 
 <DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
     @if (_vm is null)
     {
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Разработчик не найден в базе.</MudAlert>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">@Txt.S("Разработчик не найден в базе.", "This developer is not in the database.")</MudAlert>
     }
     else
     {
@@ -21,49 +21,49 @@
             <MudSpacer />
             @if (vm.Dev?.Url is { } url)
             {
-                <MudButton Href="@url" Target="_blank" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" EndIcon="@Icons.Material.Filled.OpenInNew">Профиль на itch.io</MudButton>
+                <MudButton Href="@url" Target="_blank" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" EndIcon="@Icons.Material.Filled.OpenInNew">@Txt.S("Профиль на itch.io", "Profile on itch.io")</MudButton>
             }
         </div>
         <MudText Class="itch-muted mb-3">
             @if (vm.Dev?.RegisteredAt is { } reg)
             {
-                <span>На itch.io с @Fmt.Date(reg). </span>
+                <span>@Txt.S($"На itch.io с {Fmt.Date(reg)}. ", $"On itch.io since {Fmt.Date(reg)}. ")</span>
             }
-            Здесь только игры, которые уже есть в базе.
+            @Txt.S("Здесь только игры, которые уже есть в базе.", "Only games already in the database are shown here.")
         </MudText>
 
         <MudGrid Spacing="3" Class="mb-1">
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Подписчики" Value="@Fmt.N(vm.Dev?.Followers)" Large="true"
-                         Hint="@(vm.Dev?.FollowersDelta30 is { } d ? $"{Fmt.Signed(d)} за 30 дней" : "рост появится после нескольких снимков")" />
+                    <Kpi Label="@Txt.S("Подписчики", "Followers")" Value="@Fmt.N(vm.Dev?.Followers)" Large="true"
+                         Hint="@(vm.Dev?.FollowersDelta30 is { } d ? Txt.S($"{Fmt.Signed(d)} за 30 дней", $"{Fmt.Signed(d)} in 30 days") : Txt.S("рост появится после нескольких снимков", "growth shows up after a few snapshots"))" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Игр в базе" Value="@Fmt.N(vm.Games.Count)" Large="true" Hint="@($"с ≥ {F.MinRatings} оценками: {Fmt.N(vm.Rated)}")" />
+                    <Kpi Label="@Txt.S("Игр в базе", "Games in the database")" Value="@Fmt.N(vm.Games.Count)" Large="true" Hint="@Txt.S($"с ≥ {F.MinRatings} оценками: {Fmt.N(vm.Rated)}", $"with ≥ {F.MinRatings} ratings: {Fmt.N(vm.Rated)}")" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Оценок всего" Value="@Fmt.N(vm.SumRatings)" Large="true" />
+                    <Kpi Label="@Txt.S("Оценок всего", "Ratings total")" Value="@Fmt.N(vm.SumRatings)" Large="true" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Медиана оценок" Value="@Fmt.N(vm.Median, 0)" Large="true" Hint="@($"по itch.io {Fmt.N(vm.GlobalMedian, 0)}")"
+                    <Kpi Label="@Txt.S("Медиана оценок", "Median ratings")" Value="@Fmt.N(vm.Median, 0)" Large="true" Hint="@Txt.S($"по itch.io {Fmt.N(vm.GlobalMedian, 0)}", $"itch.io overall {Fmt.N(vm.GlobalMedian, 0)}")"
                          Formula="@Formulas.Median(F.MinRatings).Formula" Tip="@Formulas.Median(F.MinRatings).Text" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Средняя оценка" Value="@Fmt.Stars(vm.MeanStars)" Large="true" Hint="по играм с оценками" />
+                    <Kpi Label="@Txt.S("Средняя оценка", "Average rating")" Value="@Fmt.Stars(vm.MeanStars)" Large="true" Hint="@Txt.S("по играм с оценками", "across rated games")" />
                 </MudPaper>
             </MudItem>
             <MudItem xs="6" md="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">
-                    <Kpi Label="Оценок на подписчика" Value="@Fmt.N(vm.RatingsPerFollower, 2)" Large="true"
-                         Tip="Сколько оценок собирают игры автора на одного подписчика. Высокое значение — игры находят аудиторию сами, низкое — держатся на подписчиках." />
+                    <Kpi Label="@Txt.S("Оценок на подписчика", "Ratings per follower")" Value="@Fmt.N(vm.RatingsPerFollower, 2)" Large="true"
+                         Tip="@Txt.S("Сколько оценок собирают игры автора на одного подписчика. Высокое значение — игры находят аудиторию сами, низкое — держатся на подписчиках.", "How many ratings the author's games collect per follower. A high value means the games find an audience on their own; a low value means they rely on followers.")" />
                 </MudPaper>
             </MudItem>
         </MudGrid>
@@ -71,20 +71,20 @@
         <MudGrid Spacing="3">
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4 mb-3" Outlined="true">
-                    <div class="itch-section-title">Подписчики по дням</div>
-                    @if (_followers.Count < 2)
+                    <div class="itch-section-title">@Txt.S("Подписчики по дням", "Followers by day")</div>
+                    @if (_followerHistory.Count < 2)
                     {
-                        <MudText Typo="Typo.body2" Class="itch-muted">Нужно хотя бы два снимка профиля. Ежедневный сбор обновляет профили активных авторов.</MudText>
+                        <MudText Typo="Typo.body2" Class="itch-muted">@Txt.S("Нужно хотя бы два снимка профиля. Ежедневный сбор обновляет профили активных авторов.", "At least two profile snapshots are needed. The daily crawl updates profiles of active authors.")</MudText>
                     }
                     else
                     {
-                        <SeriesChart Series="_followers" Height="240" Decimals="0" />
+                        <SeriesChart Series="FollowerChart" Height="240" Decimals="0" />
                     }
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4 mb-3" Outlined="true">
-                    <div class="itch-section-title">Частые теги автора</div>
+                    <div class="itch-section-title">@Txt.S("Частые теги автора", "The author's frequent tags")</div>
                     <div class="d-flex flex-wrap gap-1">
                         @foreach (var (tag, count) in vm.Tags)
                         {
@@ -94,7 +94,7 @@
                         }
                         @if (vm.Tags.Count == 0)
                         {
-                            <MudText Typo="Typo.body2" Class="itch-muted">Теги появятся после чтения страниц игр.</MudText>
+                            <MudText Typo="Typo.body2" Class="itch-muted">@Txt.S("Теги появятся после чтения страниц игр.", "Tags appear after game pages are read.")</MudText>
                         }
                     </div>
                 </MudPaper>
@@ -102,7 +102,7 @@
         </MudGrid>
 
         <MudPaper Class="pa-2" Outlined="true">
-            <GamesTable Games="vm.Games" Title="Игры автора" ExportName="@($"developer-{Id}")" BayesMinVotes="A.Params.BayesMinVotes" />
+            <GamesTable Games="vm.Games" Title="@Txt.S("Игры автора", "Author's games")" ExportName="@($"developer-{Id}")" BayesMinVotes="A.Params.BayesMinVotes" />
         </MudPaper>
     }
 </DataGate>
@@ -114,16 +114,18 @@
         double? MeanStars, double? RatingsPerFollower, List<(TagRow Tag, int Count)> Tags);
 
     private Vm? _vm;
-    private List<ChartSeries> _followers = [];
+    private List<(DateOnly Day, int Followers)> _followerHistory = [];
     private long _loadedId;
+
+    private List<ChartSeries> FollowerChart => _followerHistory.Count < 2 ? [] :
+        [new ChartSeries(Txt.S("Подписчики", "Followers"), _followerHistory.Select(h => new ChartPoint(h.Day.ToString("dd.MM"), h.Followers)).ToList(), ChartKind.Area, Color: "#5CC8FA")];
 
     protected override async Task OnParametersSetAsync()
     {
         if (_loadedId == Id) return;
         _loadedId = Id;
         var history = await Queries.DeveloperHistoryAsync(Id);
-        _followers = history.Count < 2 ? [] :
-            [new ChartSeries("Подписчики", history.Select(h => new ChartPoint(h.Day.ToString("dd.MM"), h.Followers)).ToList(), ChartKind.Area, Color: "#5CC8FA")];
+        _followerHistory = history.Select(h => (h.Day, h.Followers)).ToList();
         await RecomputeAsync();
     }
 
