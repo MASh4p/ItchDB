@@ -79,14 +79,6 @@ public static class InsightGenerator
         var min = x.Filter.MinRatings;
         var all = x.All;
 
-        if (x.Data.YearsTotal > 0 && x.Data.YearsComplete < x.Data.YearsTotal)
-        {
-            list.Add(new Insight(T("Данные собраны частично", "Collection is still partial"),
-                T($"Полностью пройдено {x.Data.YearsComplete} из {x.Data.YearsTotal} лет каталога. Пока статистика смещена к более заметным играм: медианы и доли успешных игр завышены. «Глубокий сбор» доберёт остальное.",
-                  $"Fully walked {x.Data.YearsComplete} of {x.Data.YearsTotal} catalog years. Stats still lean toward noticeable games: medians and success shares are high. Deep collection fills the rest."),
-                InsightTone.Warn, "/data"));
-        }
-
         if (all.TotalItch is { } total && total > 0)
         {
             var zero = (double)all.Bin0 / all.Denominator;

@@ -1,0 +1,322 @@
+html, body {
+    background: #121318;
+}
+
+h1:focus {
+    outline: none;
+}
+
+a {
+    color: #FA5C5C;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.itch-logo {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.itch-logo span {
+    color: #FA5C5C;
+}
+
+.itch-appbar {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.itch-min-select {
+    width: 136px;
+    min-width: 136px;
+    flex: 0 0 auto;
+    margin-top: 0 !important;
+}
+
+.itch-min-select .mud-input-control-input-container {
+    margin-top: 0;
+}
+
+.itch-card {
+    height: 100%;
+}
+
+.itch-kpi-value {
+    font-size: 1.7rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.itch-kpi-value.small {
+    font-size: 1.15rem;
+}
+
+.itch-kpi-label {
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.itch-kpi-hint {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.75rem;
+    margin-top: 2px;
+}
+
+.itch-formula {
+    font-family: Consolas, "Cascadia Mono", monospace;
+    white-space: pre-wrap;
+    font-size: 0.78rem;
+}
+
+.itch-tip-icon {
+    opacity: 0.55;
+    cursor: help;
+    vertical-align: middle;
+}
+
+.itch-thumb {
+    width: 64px;
+    height: 51px;
+    object-fit: cover;
+    border-radius: 4px;
+    background: #22232b;
+}
+
+.itch-thumb-lg {
+    width: 315px;
+    max-width: 100%;
+    border-radius: 8px;
+    background: #22232b;
+}
+
+.itch-insight {
+    border-left: 3px solid #FA5C5C;
+    padding-left: 12px;
+}
+
+.itch-insight.good {
+    border-left-color: #4CC38A;
+}
+
+.itch-insight.warn {
+    border-left-color: #F5B84A;
+}
+
+.itch-insight.bad {
+    border-left-color: #FF6B6B;
+}
+
+.itch-insight.info {
+    border-left-color: #5CA9FA;
+}
+
+.itch-log {
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 0.78rem;
+    max-height: 420px;
+    overflow-y: auto;
+    background: #0f1014;
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.itch-log .warn {
+    color: #F5B84A;
+}
+
+.itch-log .error {
+    color: #FF6B6B;
+}
+
+.itch-muted {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.itch-num {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.itch-quadrant-blue {
+    color: #5CC8FA;
+}
+
+.itch-quadrant-red {
+    color: #FF6B6B;
+}
+
+.itch-quadrant-quiet {
+    color: #4CC38A;
+}
+
+.itch-quadrant-trap {
+    color: #F5B84A;
+}
+
+.itch-neighbor-self {
+    background: rgba(250, 92, 92, 0.12);
+}
+
+.itch-quadrant {
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: help;
+}
+
+.itch-game-title {
+    font-weight: 600;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.itch-game-sub {
+    font-size: 0.76rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.itch-nsfw {
+    color: #FF8FB1;
+    font-weight: 600;
+}
+
+.itch-search {
+    max-width: 220px;
+    margin-top: 0 !important;
+}
+
+.itch-threshold {
+    width: 118px;
+    min-width: 118px;
+    flex: 0 0 auto;
+    margin-top: 0 !important;
+}
+
+.itch-threshold .mud-input-control-input-container {
+    margin-top: 0;
+}
+
+.itch-table .mud-table-toolbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+}
+
+.itch-table .mud-table-cell {
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+.itch-section-title {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.62);
+    margin-bottom: 8px;
+}
+
+.itch-map {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.itch-map-point {
+    cursor: pointer;
+}
+
+.itch-map-point:hover circle {
+    fill-opacity: 0.9;
+}
+
+.itch-map-tick {
+    fill: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+}
+
+.itch-map-axis {
+    fill: rgba(255, 255, 255, 0.62);
+    font-size: 13px;
+}
+
+.itch-map-label {
+    fill: rgba(255, 255, 255, 0.85);
+    font-size: 12px;
+    paint-order: stroke;
+    stroke: #1B1C23;
+    stroke-width: 3px;
+}
+
+.itch-map-quadrant {
+    font-size: 14px;
+    font-weight: 700;
+    opacity: 0.8;
+}
+
+.itch-bar-bg {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 3px;
+    height: 8px;
+    overflow: hidden;
+}
+
+.itch-bar-fill {
+    background: #FA5C5C;
+    height: 100%;
+}
+
+.itch-cover-lg {
+    width: 100%;
+    max-width: 315px;
+    aspect-ratio: 315 / 250;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #22232b;
+}
+
+.itch-kv td {
+    padding: 3px 12px 3px 0;
+    vertical-align: top;
+}
+
+.itch-kv td:first-child {
+    color: rgba(255, 255, 255, 0.55);
+    white-space: nowrap;
+}
+
+.blazor-error-boundary {
+    background: #b32121;
+    padding: 1rem 1rem 1rem 1.5rem;
+    color: white;
+}
+
+.blazor-error-boundary::after {
+    content: "Произошла ошибка при отрисовке компонента."
+}
+
+#blazor-error-ui {
+    background: #2a1a1a;
+    color: #fff;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 2000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}

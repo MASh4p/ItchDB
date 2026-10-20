@@ -12,15 +12,6 @@
 <DataGate Snapshot="A" Busy="Computing" Error="@ComputeError">
     @if (_vm is { } vm)
     {
-        @if (D.YearsTotal > 0 && D.YearsComplete < D.YearsTotal)
-        {
-            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mb-4">
-                @Txt.S($"Оценённые игры собраны полностью за {D.YearsComplete} из {D.YearsTotal} лет — медианы и доли пока смещены к популярным играм.",
-                    $"Rated games are fully collected for {D.YearsComplete} of {D.YearsTotal} years — medians and shares still lean toward popular games.")
-                @Txt.S("Запустите", "Start a") <MudLink Href="/data">@Txt.S("глубокий сбор", "deep collection")</MudLink>@Txt.S(", он продолжит с места остановки.", "; it continues from where it stopped.")
-            </MudAlert>
-        }
-
         <MudGrid Spacing="3" Class="mb-2">
             <MudItem xs="6" sm="4" md="3" lg="2">
                 <MudPaper Class="pa-4 itch-card" Outlined="true">

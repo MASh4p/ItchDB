@@ -237,7 +237,7 @@ public sealed class GameDetailsJob(int limit) : ICrawlJob
         return rows.Select(x => (x.Id, x.Url)).ToList();
     }
 
-    /// <returns>true when the page was stored.</returns>
+    /// <returns>true when this game's page was stored. A page that belongs to another id is stored there and this id is closed.</returns>
     private static async Task<bool> SaveOneAsync(CrawlContext ctx, long id, string url, FetchResult? r)
     {
         if (r is null) return false;
@@ -268,7 +268,12 @@ public sealed class GameDetailsJob(int limit) : ICrawlJob
         }
         await ctx.Ingest.IngestGameDetailsAsync(data, url, ctx.Ct);
         ctx.CountGames(new IngestResult(0, 1));
-        return true;
+        if (data.Id == id) return true;
+        // The opened URL belongs to another row. Leaving this id pending makes the queue
+        // open the same page again until the run is stopped.
+        ctx.Warn($"{url}: страница принадлежит игре {data.Id}, а не {id}. Эту запись больше не открываю");
+        await ctx.Ingest.MarkDetailsFailedAsync(id, removed: false, ctx.Ct);
+        return false;
     }
 
     /// <summary>
