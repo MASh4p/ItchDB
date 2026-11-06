@@ -3,8 +3,9 @@ name: Preview Pages
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
-      - "preview/**"
+      - "ItchDB-preview/**"
       - ".github/workflows/preview-pages.yml"
 
 permissions:
@@ -26,6 +27,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: preview
+          path: ItchDB-preview
       - id: deployment
         uses: actions/deploy-pages@v4

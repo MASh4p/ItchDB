@@ -19,9 +19,10 @@
         var listFrom = Fmt.N(Settings.Current.RequestIntervalMs / 1000.0, 1);
         var listTo = Fmt.N((Settings.Current.RequestIntervalMs + Settings.Current.RequestJitterMs) / 1000.0, 1);
         var gamePause = Fmt.N(Settings.Current.GamePageIntervalMs / 1000.0, 0);
+        var taskTime = WindowsDailyTask.LocalTime.ToString("HH:mm");
     }
-    @Txt.S($"У itch.io нет открытого API каталога, поэтому ItchDB читает публичные страницы как обычный браузер. Одновременно открыто до {tabs} вкладок. Каждая ждёт только свою загрузку, затем эта вкладка отдыхает: списки и теги — {listFrom}–{listTo} с, страницы игр — {gamePause} с. Остальные вкладки в это время не стоят. Данные хранятся локально, каждый запуск продолжает с места остановки. Сбор идёт только пока приложение открыто.",
-           $"itch.io has no public catalog API, so ItchDB reads public pages like a normal browser. Up to {tabs} tabs stay open at once. Each one waits only for its own load, then that tab rests: lists and tags for {listFrom}–{listTo} s, game pages for {gamePause} s. The other tabs do not wait. Data is stored locally, and each run continues from where it stopped. The crawl runs only while the app is open.")
+    @Txt.S($"У itch.io нет открытого API каталога, поэтому ItchDB читает публичные страницы как обычный браузер. Одновременно открыто до {tabs} вкладок. Каждая ждёт только свою загрузку, затем эта вкладка отдыхает: списки и теги — {listFrom}–{listTo} с, страницы игр — {gamePause} с. Остальные вкладки в это время не стоят. Данные хранятся локально, каждый запуск продолжает с места остановки. Планировщик заданий Windows каждый день в {taskTime} открывает приложение и закрывает его, когда сбор заканчивается. Пока окно открыто, то же обновление стартует само.",
+           $"itch.io has no public catalog API, so ItchDB reads public pages like a normal browser. Up to {tabs} tabs stay open at once. Each one waits only for its own load, then that tab rests: lists and tags for {listFrom}–{listTo} s, game pages for {gamePause} s. The other tabs do not wait. Data is stored locally, and each run continues from where it stopped. Windows Task Scheduler opens the app every day at {taskTime} and closes it when the collection finishes. While the window is open, the same update starts on its own.")
 </MudText>
 
 <MudGrid Spacing="3">

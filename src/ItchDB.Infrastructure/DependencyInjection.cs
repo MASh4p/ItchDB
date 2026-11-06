@@ -42,7 +42,10 @@ public static class DependencyInjection
         services.AddSingleton<CrawlCoordinator>();
         services.AddSingleton<CoverageReport>();
         services.AddSingleton<LiveTotalService>();
+        if (!services.Any(d => d.ServiceType == typeof(ScheduledCollectionMode)))
+            services.AddSingleton(new ScheduledCollectionMode(false));
         services.AddHostedService<CrawlScheduler>();
+        services.AddHostedService<WindowsDailyTaskHost>();
 
         services.AddSingleton<DatasetLoader>();
         services.AddSingleton<AnalyticsService>();

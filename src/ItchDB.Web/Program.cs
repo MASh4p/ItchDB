@@ -1,13 +1,26 @@
 using ApexCharts;
 using ItchDB.Infrastructure;
 using ItchDB.Infrastructure.Analytics;
+using ItchDB.Infrastructure.Crawling;
 using ItchDB.Infrastructure.Data;
 using ItchDB.Infrastructure.Http;
+using ItchDB.Web;
 using ItchDB.Web.Components;
 using ItchDB.Web.Services;
 using MudBlazor.Services;
 using Serilog;
 using Serilog.Events;
+
+var dailyLaunch = ScheduledCollection.IsDailyLaunch(args);
+using var instance = AppInstance.TryAcquire();
+if (instance is null)
+{
+    Console.Error.WriteLine(dailyLaunch
+        ? "ItchDB уже запущен. Запуск планировщика закрывается: сбор выполнит открытое приложение."
+        : "ItchDB уже запущен.");
+    Environment.ExitCode = dailyLaunch ? 0 : 1;
+    return;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 // The app is meant to be started with `dotnet run` in any environment, so serve package assets from the build output.
@@ -39,6 +52,7 @@ builder.Services.AddApexCharts(o =>
     };
 });
 
+builder.Services.AddSingleton(new ScheduledCollectionMode(dailyLaunch));
 builder.Services.AddItchInfrastructure(dataRoot);
 builder.Services.AddScoped<UiState>();
 builder.Services.AddScoped<UiText>();

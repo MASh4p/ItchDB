@@ -20,7 +20,8 @@
 
     <MudItem xs="12" md="6" lg="4">
         <MudText Typo="Typo.subtitle1" Class="mb-2">@Txt.S("Расписание", "Schedule")</MudText>
-        <MudSwitch T="bool" @bind-Value="_m.AutoDailyEnabled" Color="Color.Primary" Label="@Txt.S("Автоматическое ежедневное обновление, пока приложение открыто", "Automatic daily update while the app is open")" Class="mb-2" />
+        <MudSwitch T="bool" @bind-Value="_m.AutoDailyEnabled" Color="Color.Primary" Label="@Txt.S("Автоматическое ежедневное обновление", "Automatic daily update")" Class="mb-1" />
+        <MudText Typo="Typo.caption" Class="itch-muted d-block mb-2">@Txt.S($"Если приложение закрыто, Планировщик заданий Windows запускает его в {WindowsDailyTask.LocalTime:HH:mm} и закрывает после сбора. Если открыто — обновление стартует само, когда приходит срок.", $"If the app is closed, Windows Task Scheduler starts it at {WindowsDailyTask.LocalTime:HH:mm} and closes it after the collection. If it is open, the update starts on its own when it is due.")</MudText>
         <MudNumericField T="int" @bind-Value="_m.DailyIntervalHours" Label="@Txt.S("Интервал, часов", "Interval, hours")" Min="1" Max="168" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
 
         <MudText Typo="Typo.subtitle1" Class="mb-2">@Txt.S("Аналитика", "Analytics")</MudText>
