@@ -9,6 +9,8 @@ publish/
 
 # Local data: database, cookies, logs, data-protection keys
 data/
+!ItchDB-preview/data/
+!ItchDB-preview/data/**
 *.db
 *.db-shm
 *.db-wal

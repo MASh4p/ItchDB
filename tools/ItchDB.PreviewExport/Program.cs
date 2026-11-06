@@ -37,7 +37,7 @@ await DatabaseInitializer.InitializeAsync(sp);
 
 var settings = sp.GetRequiredService<SettingsService>().Current;
 var parameters = settings.ToAnalyticsParams();
-var filter = new AnalyticsFilter(settings.DefaultShowNsfw, Math.Max(1, settings.DefaultMinRatings), settings.DefaultIncludeUnrated);
+var filter = new AnalyticsFilter(false, Math.Max(1, settings.DefaultMinRatings), settings.DefaultIncludeUnrated);
 var smallGames = Math.Clamp(settings.SmallGameThreshold > 0 ? settings.SmallGameThreshold : settings.MinSegmentSample, 1, 100_000);
 var useMean = settings.DemandUsesMean;
 
